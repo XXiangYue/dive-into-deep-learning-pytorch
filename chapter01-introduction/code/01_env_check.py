@@ -42,3 +42,18 @@ def set_seed(seed: int = SEED) -> None:
     random.seed(seed)
     np.random.seed(seed)
     torch.manual_seed(seed)
+
+
+def check_autograd() -> dict:
+    """最小可验证的自动微分：y = sum(3x^2)，dy/dx 应为 6x。"""
+    x = torch.arange(4.0, requires_grad=True)
+    y = (3 * x ** 2).sum()
+    y.backward()
+    analytic = 6 * x.detach()
+    return {
+        "x": x.detach().tolist(),
+        "grad": x.grad.tolist(),
+        "analytic": analytic.tolist(),
+        # 用 allclose 而不是 ==，浮点乘法顺序不同就会有 1e-7 级差异
+        "allclose": bool(torch.allclose(x.grad, analytic)),
+    }
