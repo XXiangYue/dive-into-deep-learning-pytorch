@@ -57,3 +57,15 @@ def check_autograd() -> dict:
         # 用 allclose 而不是 ==，浮点乘法顺序不同就会有 1e-7 级差异
         "allclose": bool(torch.allclose(x.grad, analytic)),
     }
+
+
+if __name__ == "__main__":
+    set_seed()
+    for key, value in describe_platform().items():
+        print(f"{key:>15}: {value}")
+
+    result = check_autograd()
+    print("x        :", result["x"])
+    print("x.grad   :", result["grad"])
+    print("6x       :", result["analytic"])
+    print("grad 正确:", result["allclose"])
