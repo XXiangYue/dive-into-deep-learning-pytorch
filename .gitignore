@@ -1,0 +1,53 @@
+# ---- Python ----
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+dist/
+*.egg-info/
+.eggs/
+
+# ---- 虚拟环境 ----
+.venv/
+venv/
+env/
+ENV/
+
+# ---- Jupyter ----
+.ipynb_checkpoints/
+*/.ipynb_checkpoints/
+*.nbconvert.ipynb
+
+# ---- 训练产物与中间结果 ----
+checkpoint/
+checkpoints/
+*.pt
+*.pth
+*.ckpt
+*.pkl
+*.joblib
+*.npy
+*.npz
+*.h5
+
+# ---- 数据集：一律不提交 ----
+data/
+dataset/
+datasets/
+!data/.gitkeep
+
+# ---- 日志与缓存 ----
+logs/
+*.log
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+__pycache__/*.cpy
+
+# ---- 编辑器 / 系统 ----
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
