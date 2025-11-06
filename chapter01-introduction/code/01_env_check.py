@@ -31,3 +31,14 @@ def describe_platform() -> dict:
         "cuda_version": torch.version.cuda,
         "device_count": torch.cuda.device_count(),
     }
+
+
+def set_seed(seed: int = SEED) -> None:
+    """固定 Python / numpy / torch 三处随机源。
+
+    这三个是彼此独立的随机数发生器，只固定 torch 的话，
+    数据打乱（用 random）和 numpy 采样还是每次不一样。
+    """
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
