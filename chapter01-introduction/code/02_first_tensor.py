@@ -13,3 +13,14 @@ def describe_tensor(name: str, x: torch.Tensor) -> None:
         f"{name:<9} shape={str(tuple(x.shape)):<12} "
         f"dtype={str(x.dtype):<8} numel={x.numel():<4} device={x.device}"
     )
+
+
+def demo_broadcast() -> torch.Tensor:
+    """广播：两个张量按尾部维度右对齐，长度为 1 的维度被复制到对方长度。"""
+    a = torch.arange(3).reshape(3, 1)   # (3, 1)
+    b = torch.arange(2).reshape(1, 2)   # (1, 2)
+    c = a + b                           # 结果是 (3, 2)
+    # 我原来以为 a + b 会报错，其实两条长度为 1 的轴各自被撑开了
+    print("a:", tuple(a.shape), "+ b:", tuple(b.shape), "-> c:", tuple(c.shape))
+    print(c)
+    return c
