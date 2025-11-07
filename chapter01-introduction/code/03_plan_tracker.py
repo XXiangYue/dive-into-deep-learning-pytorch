@@ -54,3 +54,34 @@ def build_plan(hours_per_week: float = 10.0) -> list:
                              hours=float(hours), week=start_week))
         spent += hours
     return plan
+
+
+def summarize(plan: list, hours_per_week: float = 10.0) -> dict:
+    """汇总总工时、读完需要的周数、最重的三章。"""
+    total = sum(item.hours for item in plan)
+    heaviest = sorted(plan, key=lambda it: it.hours, reverse=True)[:3]
+    longest = max(plan, key=lambda it: it.hours)
+    return {
+        "chapters": len(plan),
+        "total_hours": total,
+        "weeks_to_finish": math.ceil(total / hours_per_week),
+        "avg_hours_per_chapter": round(total / len(plan), 2),
+        "longest_chapter": (longest.chapter, longest.hours),
+        "heaviest": [(it.chapter, it.hours) for it in heaviest],
+    }
+
+
+def render_markdown(plan: list, hours_per_week: float = 10.0) -> str:
+    """渲染成 Markdown 表格：起始周 + 预计占用周数。
+
+    不用 DataFrame.to_markdown，那个要装 tabulate，多一个依赖不值。
+    """
+    lines = ["| 章 | 目录 | 工时 | 起始周 | 占用周数 |",
+             "|:---:|---|---:|---:|---:|"]
+    for item in plan:
+        span = math.ceil(item.hours / hours_per_week)
+        lines.append(
+            f"| {item.chapter} | {item.directory} | {item.hours:.0f} "
+            f"| {item.week} | {span} |"
+        )
+    return "\n".join(lines)
