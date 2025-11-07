@@ -24,3 +24,21 @@ def demo_broadcast() -> torch.Tensor:
     print("a:", tuple(a.shape), "+ b:", tuple(b.shape), "-> c:", tuple(c.shape))
     print(c)
     return c
+
+
+def demo_autograd() -> None:
+    """对 y = x^T x 求导，梯度应该是 2x；顺便验证梯度会累加。"""
+    x = torch.arange(4.0, requires_grad=True)
+    y = torch.dot(x, x)
+    y.backward()
+    print("x        :", x.detach().tolist())
+    print("x.grad   :", x.grad.tolist())
+    print("2x       :", (2 * x.detach()).tolist())
+
+    # 不清零就再 backward，梯度会加到旧值上，这是最高频的坑之一
+    (2 * x).sum().backward()
+    print("没清零再 backward:", x.grad.tolist())
+
+    x.grad.zero_()
+    (2 * x).sum().backward()
+    print("清零后 backward  :", x.grad.tolist())
