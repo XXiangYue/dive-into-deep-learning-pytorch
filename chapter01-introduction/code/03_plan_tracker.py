@@ -85,3 +85,12 @@ def render_markdown(plan: list, hours_per_week: float = 10.0) -> str:
             f"| {item.week} | {span} |"
         )
     return "\n".join(lines)
+
+
+if __name__ == "__main__":
+    plan = build_plan(hours_per_week=10.0)
+    print(render_markdown(plan, hours_per_week=10.0))
+    print()
+    stats = summarize(plan, hours_per_week=10.0)
+    for key, value in stats.items():
+        print(f"{key:>24}: {value}")
