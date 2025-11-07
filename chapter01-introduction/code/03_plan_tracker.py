@@ -37,3 +37,20 @@ class PlanItem:
     directory: str
     hours: float
     week: int = 0
+
+
+def build_plan(hours_per_week: float = 10.0) -> list:
+    """按累计工时推算每章的起始周。
+
+    不能「一章塞一周」：第 7 章预估 22 小时，一周只有 10 小时，
+    硬塞的结果是每周都超支、后面的周次全是假的。
+    所以用「已花工时 // 每周预算 + 1」算起始周，一章自然就跨了好几周。
+    """
+    plan = []
+    spent = 0.0
+    for chapter, directory, hours in CHAPTERS:
+        start_week = int(spent // hours_per_week) + 1
+        plan.append(PlanItem(chapter=chapter, directory=directory,
+                             hours=float(hours), week=start_week))
+        spent += hours
+    return plan
