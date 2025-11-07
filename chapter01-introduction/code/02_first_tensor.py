@@ -42,3 +42,14 @@ def demo_autograd() -> None:
     x.grad.zero_()
     (2 * x).sum().backward()
     print("清零后 backward  :", x.grad.tolist())
+
+
+if __name__ == "__main__":
+    describe_tensor("arange", torch.arange(12))
+    describe_tensor("randn", torch.randn(2, 3, 4))
+    describe_tensor("int64", torch.tensor([[1, 2], [3, 4]]))
+
+    c = demo_broadcast()
+    describe_tensor("c", c)
+
+    demo_autograd()
