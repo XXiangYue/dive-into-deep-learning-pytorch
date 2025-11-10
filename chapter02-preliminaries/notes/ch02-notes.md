@@ -143,3 +143,37 @@ X = torch.tensor(data.values, dtype=torch.float32)
 
 `pd.get_dummies(..., dummy_na=True)` 会给缺失单独开一列 `Alley_nan`，
 这是有意的：缺失本身可能就是信息（比如「没记录巷子类型」说明是高价房）。
+
+## 2.3 线性代数
+
+### 矩阵乘的两套读法
+
+设 $\mathbf{A} \in \mathbb{R}^{m \times n}$，$\mathbf{x} \in \mathbb{R}^{n}$。
+
+**行视角**（每个输出是一个内积）：
+
+$$(\mathbf{A}\mathbf{x})_i = \mathbf{a}_{i,:}^\top \mathbf{x} = \sum_{j=1}^{n} a_{ij} x_j$$
+
+**列视角**（输出是列的线性组合）：
+
+$$\mathbf{A}\mathbf{x} = \sum_{j=1}^{n} x_j\, \mathbf{a}_{:,j}$$
+
+**我为什么两个都要记：** 行视角适合理解「一个神经元就是一个内积」，
+所以线性层 `nn.Linear(in, out)` 的权重矩阵是 `(out, in)`，每行对应一个输出神经元。
+列视角适合理解「通道混合」，1×1 卷积就是把 $C_{\text{in}}$ 个通道按权重组合成
+$C_{\text{out}}$ 个通道，本质是一次矩阵乘。第 6 章会再用到。
+
+### 范数
+
+$$\|\mathbf{x}\|_2 = \sqrt{\sum_{i} x_i^2}, \qquad \|\mathbf{X}\|_F = \sqrt{\sum_{i,j} x_{ij}^2}$$
+
+L2 范数对 $\mathbf{x}$ 的梯度是 $\mathbf{x} / \|\mathbf{x}\|_2$（当 $\mathbf{x} \ne \mathbf{0}$），
+这个结果我在 2.5 节用 autograd 验证过。L1 范数在 0 处不可导，所以权重衰减一般用 L2。
+权重衰减项加在损失里是 $\frac{\lambda}{2}\|\mathbf{w}\|_2^2$，梯度是 $\lambda \mathbf{w}$，
+系数 $\frac{1}{2}$ 又是为了消掉平方导出的 2。
+
+### 按轴求和的形状
+
+`X.sum(axis=0)` 结果是 `(n,)`，不是 `(1, n)`；`keepdim=True` 才是 `(1, n)`。
+写 `X / X.sum(axis=1)` 时如果忘了 keepdim，广播会按尾部对齐，形状全乱——
+这是我这次实际报错的地方，报错信息是 `The size of tensor a (3) must match the size of tensor b (2)`。
