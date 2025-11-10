@@ -177,3 +177,38 @@ L2 范数对 $\mathbf{x}$ 的梯度是 $\mathbf{x} / \|\mathbf{x}\|_2$（当 $\m
 `X.sum(axis=0)` 结果是 `(n,)`，不是 `(1, n)`；`keepdim=True` 才是 `(1, n)`。
 写 `X / X.sum(axis=1)` 时如果忘了 keepdim，广播会按尾部对齐，形状全乱——
 这是我这次实际报错的地方，报错信息是 `The size of tensor a (3) must match the size of tensor b (2)`。
+
+## 2.4 微积分
+
+### 导数与梯度
+
+一元导数：$\dfrac{df}{dx} = \lim_{h \to 0}\dfrac{f(x+h) - f(x)}{h}$。
+多元函数对每个变量求偏导，拼成梯度向量：
+
+$$\nabla_{\mathbf{x}} f = \left[\frac{\partial f}{\partial x_1}, \dots, \frac{\partial f}{\partial x_n}\right]^\top$$
+
+### 链式法则
+
+若 $y = f(u)$，$u = g(x)$，则
+
+$$\frac{dy}{dx} = \frac{dy}{du}\cdot\frac{du}{dx}$$
+
+多元版本（反向传播的骨架）：设 $z = f(\mathbf{y})$，$\mathbf{y} = g(\mathbf{x})$，则
+
+$$\frac{\partial z}{\partial x_i} = \sum_{j} \frac{\partial z}{\partial y_j}\frac{\partial y_j}{\partial x_i}$$
+
+**我的判断：这个求和号就是「一个变量被多条路径用到时，梯度要累加」。**
+残差连接 $y = f(x) + x$ 的梯度里天然多一个恒等项 $\partial x/\partial x = 1$，
+所以深网络的梯度不会一路衰减到 0——第 7 章 ResNet 的全部道理就在这一行。
+
+### 为什么沿负梯度走
+
+一阶泰勒展开：$f(\mathbf{x} + \eta \mathbf{d}) \approx f(\mathbf{x}) + \eta \nabla f^\top \mathbf{d}$。
+要让函数值下降，就要让 $\nabla f^\top \mathbf{d} < 0$；在 $\|\mathbf{d}\|=1$ 的约束下，
+$\mathbf{d} = -\nabla f / \|\nabla f\|$ 使内积最小（柯西–施瓦茨），即下降最快。
+所以梯度下降是
+
+$$\mathbf{x} \leftarrow \mathbf{x} - \eta \nabla f(\mathbf{x})$$
+
+**为什么不直接解 $\nabla f = 0$：** 线性回归可以（正规方程），
+但深层网络的参数上百万且非凸，解方程既算不动也没有唯一解。这是优化算法存在的理由。
