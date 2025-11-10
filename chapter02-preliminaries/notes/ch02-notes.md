@@ -110,3 +110,36 @@ Y[:] = Y + X       # id 也没变：先算临时结果，再拷回原位置
 做 softmax 减最大值时就是靠这个：
 
 $$y_i = \frac{\exp(x_i - \max_j x_j)}{\sum_k \exp(x_k - \max_j x_j)}$$
+
+## 2.2 数据预处理
+
+流程固定四步：读表 → 处理缺失值 → 类别特征编码 → 转张量。
+
+```python
+import pandas as pd
+import torch
+
+# 用四行小表代替真实数据，坑一样能复现：Area 是数值列，Alley 是字符串列
+data = pd.DataFrame({
+    "Area": [8450.0, 9600.0, None, 11250.0],
+    "Alley": ["Pave", None, "Grvl", None],
+})
+numeric = data.select_dtypes(include="number").columns
+data[numeric] = data[numeric].fillna(data[numeric].mean())
+data = pd.get_dummies(data, dummy_na=True)
+X = torch.tensor(data.values, dtype=torch.float32)
+```
+
+### 踩坑记录
+
+1. **`fillna(data.mean())` 在第 2 列是字符串时直接报错或静默出 NaN。**
+   我第一版对整表 fillna，因为表里有一列 `Alley` 是字符串，pandas 把整列当 object，
+   `mean()` 返回 Series 里没有这一列，结果那一列还是 NaN，转张量时报
+   `can't convert np.ndarray of type numpy.object_`。正确做法是先分 numeric / 类别两路。
+2. **`torch.tensor(df.values)` 不指定 dtype，整数列会让整个张量变成 int64。**
+   后面除以均值就变成整数除法，全 0。必须显式 `dtype=torch.float32`。
+3. **`df.values` 会丢掉列名顺序信息**，用了 `get_dummies` 之后列顺序是原列 + 各类别，
+   训练和推理必须用同一份列顺序，否则特征对不上。稳妥做法是先 `reindex(columns=...)`。
+
+`pd.get_dummies(..., dummy_na=True)` 会给缺失单独开一列 `Alley_nan`，
+这是有意的：缺失本身可能就是信息（比如「没记录巷子类型」说明是高价房）。
