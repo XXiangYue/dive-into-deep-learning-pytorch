@@ -52,3 +52,31 @@ def demo_broadcast() -> None:
             a, b = torch.ones(sa), torch.ones(sb)
             note = f"-> {(a + b).shape}"
         print(f"{str(sa):<14} + {str(sb):<10} broadcast={str(ok):<6} {note}")
+
+
+def demo_axis_sum() -> None:
+    """按轴求和：axis 消掉哪一维，keepdim 保不保留。"""
+    x = torch.arange(12, dtype=torch.float32).reshape(3, 4)
+    shape_report("x", x)
+    shape_report("sum(axis=0)", x.sum(axis=0))
+    shape_report("sum(axis=0,keepdim)", x.sum(axis=0, keepdim=True))
+    shape_report("sum(axis=1)", x.sum(axis=1))
+    # 归一化：不加 keepdim 会按尾部对齐，3 和 4 对不上，直接报错
+    normalized = x / x.sum(axis=1, keepdim=True)
+    print("按行归一化后每行和:", normalized.sum(axis=1).tolist())
+
+
+def demo_inplace_memory() -> None:
+    """原地操作：用 id() 看内存有没有被复用。"""
+    x = torch.ones(4, 3)
+    y = torch.zeros(4, 3)
+    before = id(y)
+    y = y + x
+    print("y = y + x   id 变了:", id(y) != before)
+    before = id(y)
+    y += x
+    print("y += x      id 没变:", id(y) == before)
+    before = id(y)
+    y[:] = y + x
+    print("y[:] = y+x  id 没变:", id(y) == before)
+    print(y[0].tolist())
