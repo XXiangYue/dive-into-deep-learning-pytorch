@@ -80,3 +80,13 @@ def demo_inplace_memory() -> None:
     y[:] = y + x
     print("y[:] = y+x  id 没变:", id(y) == before)
     print(y[0].tolist())
+
+
+if __name__ == "__main__":
+    demo_create_and_reshape()
+    print()
+    demo_broadcast()
+    print()
+    demo_axis_sum()
+    print()
+    demo_inplace_memory()
