@@ -212,3 +212,43 @@ $$\mathbf{x} \leftarrow \mathbf{x} - \eta \nabla f(\mathbf{x})$$
 
 **为什么不直接解 $\nabla f = 0$：** 线性回归可以（正规方程），
 但深层网络的参数上百万且非凸，解方程既算不动也没有唯一解。这是优化算法存在的理由。
+
+## 2.5 自动微分
+
+### 它到底做了什么
+
+前向时记录一张计算图：每个张量记住「我是由谁、用什么算子算出来的」。
+反向时从输出往输入走，每个节点只需要把自己的局部雅可比乘上上游传来的梯度。
+
+$$\frac{\partial L}{\partial \mathbf{x}} = \sum_{\text{path}} \prod_{\text{edge}} J_{\text{edge}}$$
+
+和符号求导的区别：符号求导会展开成巨大的表达式（$f$ 复用时指数爆炸），
+自动微分的复杂度是 $O(\text{图的大小})$，与求几次导无关。
+
+### 三个必须记住的接口细节
+
+1. **梯度是累加的**：`backward()` 不清零，`.grad` 会叠加。每轮必须 `zero_()`。
+2. **`backward()` 只能对标量调用**（除非给 `gradient` 参数）。对向量 `y` 调 `y.backward()`
+   会报 `grad can be implicitly created only for scalar outputs`。
+   想要向量-雅可比积就传 `y.backward(torch.ones_like(y))`。
+3. **`detach()` 断图**：`u = y.detach()` 之后 $u$ 不再追踪历史，
+   后面所有基于 $u$ 的计算都不会把梯度传回 $y$。d2l 里更新参数就是用这个思路。
+
+### 二阶导
+
+要算 $\partial^2 y/\partial x^2$，第一次 `backward` 时必须 `create_graph=True`，
+否则计算图已经被释放：
+
+```python
+x = torch.tensor([2.0], requires_grad=True)
+y = x ** 3
+dy = torch.autograd.grad(y, x, create_graph=True)[0]   # 3x^2
+d2y = torch.autograd.grad(dy, x)[0]                    # 6x
+```
+
+**我的判断：二阶导现在不用，但第 11 章讲牛顿法、第 4 章讲 Hessian 的时候会回来找这段。**
+
+### 一个容易误解的点
+
+叶子张量（用户直接创建的）的 `.grad` 会被保留；中间结果的 `.grad` 默认是 `None` 并会被释放。
+想让中间张量保留梯度得 `x.retain_grad()`。我一开始以为所有 `.grad` 都能看，找了半天为什么是 None。
