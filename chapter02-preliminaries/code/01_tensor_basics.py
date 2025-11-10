@@ -25,3 +25,30 @@ def demo_create_and_reshape() -> None:
     # squeeze/unsqueeze 只增删长度为 1 的轴，不改变数据排布
     shape_report("unsqueeze(0)", x.unsqueeze(0))
     shape_report("squeeze", x.unsqueeze(0).squeeze(0))
+
+
+def can_broadcast(shape_a: tuple, shape_b: tuple) -> bool:
+    """从尾部右对齐逐维比较：相等或其中一个是 1 就能广播。"""
+    for da, db in zip(reversed(shape_a), reversed(shape_b)):
+        if da != db and da != 1 and db != 1:
+            return False
+    return True
+
+
+def demo_broadcast() -> None:
+    """跑几组形状，看看哪些能广播、结果形状是什么。"""
+    cases = [
+        ((3, 1), (1, 2)),
+        ((3,), (3, 2)),
+        ((3, 1), (3, 2)),
+        ((2, 3, 4), (4,)),
+        ((2, 3, 4), (3, 1)),
+        ((5,), (2, 3)),
+    ]
+    for sa, sb in cases:
+        ok = can_broadcast(sa, sb)
+        note = ""
+        if ok:
+            a, b = torch.ones(sa), torch.ones(sb)
+            note = f"-> {(a + b).shape}"
+        print(f"{str(sa):<14} + {str(sb):<10} broadcast={str(ok):<6} {note}")
