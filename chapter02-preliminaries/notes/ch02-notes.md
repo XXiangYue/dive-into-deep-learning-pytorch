@@ -252,3 +252,46 @@ d2y = torch.autograd.grad(dy, x)[0]                    # 6x
 
 叶子张量（用户直接创建的）的 `.grad` 会被保留；中间结果的 `.grad` 默认是 `None` 并会被释放。
 想让中间张量保留梯度得 `x.retain_grad()`。我一开始以为所有 `.grad` 都能看，找了半天为什么是 None。
+
+## 2.6 概率
+
+### 基本关系
+
+条件概率：
+
+$$P(A \mid B) = \frac{P(A, B)}{P(B)}$$
+
+贝叶斯公式：
+
+$$P(A \mid B) = \frac{P(B \mid A)\,P(A)}{P(B)}$$
+
+乘法法则 $P(A,B) = P(A\mid B)P(B)$，多个变量的链式分解
+$P(x_1, \dots, x_T) = \prod_{t=1}^{T} P(x_t \mid x_1, \dots, x_{t-1})$。
+**这个式子就是第 8 章语言模型的目标函数**，看着平平无奇，但它把「整段文本的概率」
+拆成了每个位置一个条件概率，才能逐 token 训练。
+
+### 期望、方差
+
+$$\mathbb{E}[X] = \sum_{x} x\, p(x), \qquad \mathrm{Var}[X] = \mathbb{E}\left[(X - \mathbb{E}[X])^2\right] = \mathbb{E}[X^2] - \mathbb{E}[X]^2$$
+
+第二条等式我手推过：展开平方后交叉项是 $-2\mathbb{E}[X]\mathbb{E}[X]$，
+剩下的正是 $\mathbb{E}[X^2] - (\mathbb{E}[X])^2$。用这条算方差比第一条少一次遍历。
+
+### 交叉熵 = 负对数似然
+
+设真实标签是 one-hot 的 $\mathbf{y}$，预测分布 $\hat{\mathbf{y}} = \mathrm{softmax}(\mathbf{o})$：
+
+$$l(\mathbf{y}, \hat{\mathbf{y}}) = -\sum_{j} y_j \log \hat{y}_j = -\log \hat{y}_{y}$$
+
+因为 $\mathbf{y}$ 只有一个位置是 1。所以交叉熵就是「正确类别的预测概率的负对数」，
+也就是该样本在模型下的负对数似然。最小化交叉熵 = 最大化似然。
+
+**我的判断：这个等式让「损失函数」和「概率模型」接上了。**
+第 3 章只要记住一件事：softmax 输出被解释成概率，交叉熵就是它的负对数似然，
+推梯度时 $-\log \mathrm{softmax}$ 里的归一化项会自动消掉。
+
+### 抽样
+
+`torch.multinomial(probs, num_samples, replacement=True)` 按概率抽样。
+`torch.normal(mean, std, size)` 抽正态。经验分布随样本数收敛到真实分布（大数定律），
+我在 `code/04_probability.py` 里用 100 / 1000 / 10000 三档看了误差怎么降。
