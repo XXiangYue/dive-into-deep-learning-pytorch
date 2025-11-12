@@ -58,3 +58,11 @@ def print_table(rows: list) -> None:
     naive = min(t for n, t in rows if n == "naive")
     vec = min(t for n, t in rows if n == "vectorized")
     print(f"加速比: {naive / vec:.1f}x")
+
+
+if __name__ == "__main__":
+    a, b = make_inputs()
+    ok = torch.allclose(add_naive(a, b), add_vectorized(a, b))
+    print("两个实现结果一致:", ok)
+    print("线程数:", torch.get_num_threads())
+    print_table(compare(repeat=3))
