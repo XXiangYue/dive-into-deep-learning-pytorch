@@ -21,3 +21,25 @@ def empirical_freq(samples: torch.Tensor, k: int = 6) -> torch.Tensor:
     """经验频率：每个取值的出现次数 / 总数。用 bincount 一次算完，不要写 for。"""
     counts = torch.bincount(samples, minlength=k).float()
     return counts / samples.numel()
+
+
+def law_of_large_numbers(sizes=(10, 100, 1000, 10000, 100000)) -> list:
+    """对每个样本量，比较经验均值与理论均值 2.5（0..5 的均匀分布）。"""
+    out = []
+    for n in sizes:
+        samples = sample_dice(n).float()
+        mean = samples.mean().item()
+        out.append((n, mean, abs(mean - 2.5)))
+    return out
+
+
+def multinomial_estimate(probs=(0.1, 0.2, 0.3, 0.4), n: int = 1000) -> dict:
+    """按给定概率抽 n 次，返回经验分布与 L1 误差。"""
+    p = torch.tensor(probs, dtype=torch.float32)
+    samples = torch.multinomial(p, num_samples=n, replacement=True)
+    freq = torch.bincount(samples, minlength=len(probs)).float() / n
+    return {
+        "true": [round(v, 4) for v in p.tolist()],
+        "empirical": [round(v, 4) for v in freq.tolist()],
+        "l1_error": round(float((freq - p).abs().sum()), 4),
+    }
