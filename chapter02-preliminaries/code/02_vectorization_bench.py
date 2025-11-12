@@ -31,3 +31,30 @@ def add_naive(a: torch.Tensor, b: torch.Tensor) -> torch.Tensor:
 def add_vectorized(a: torch.Tensor, b: torch.Tensor) -> torch.Tensor:
     """一次算子调用完成全部元素。"""
     return a + b
+
+
+def time_once(fn, *args) -> float:
+    """计时一次，返回毫秒。"""
+    begin = time.time()
+    fn(*args)
+    return (time.time() - begin) * 1000
+
+
+def compare(repeat: int = 3) -> list:
+    """两个实现各跑 repeat 次，返回 [(名字, 毫秒列表)]。"""
+    a, b = make_inputs()
+    rows = []
+    for name, fn in (("naive", add_naive), ("vectorized", add_vectorized)):
+        times = [time_once(fn, a, b) for _ in range(repeat)]
+        rows.append((name, times))
+    return rows
+
+
+def print_table(rows: list) -> None:
+    """打印对比表，并给出加速比。"""
+    print(f"{'impl':<12}{'min(ms)':>10}{'max(ms)':>10}")
+    for name, times in rows:
+        print(f"{name:<12}{min(times):>10.2f}{max(times):>10.2f}")
+    naive = min(t for n, t in rows if n == "naive")
+    vec = min(t for n, t in rows if n == "vectorized")
+    print(f"加速比: {naive / vec:.1f}x")
