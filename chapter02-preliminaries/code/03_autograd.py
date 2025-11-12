@@ -52,3 +52,22 @@ def jacobian_by_vjp(fn, x: torch.Tensor) -> torch.Tensor:
         y.backward(v)          # 等价于 v^T J
         rows.append(xi.grad.detach().clone())
     return torch.stack(rows)
+
+
+def second_order(x_val: float = 2.0) -> tuple:
+    """y = x^3 的一阶与二阶导：3x^2 和 6x，二阶导需要 create_graph。"""
+    x = torch.tensor([x_val], requires_grad=True)
+    y = x ** 3
+    dy = torch.autograd.grad(y, x, create_graph=True)[0]
+    d2y = torch.autograd.grad(dy, x)[0]
+    return dy.item(), d2y.item()
+
+
+def detach_breaks_graph() -> dict:
+    """detach 之后的计算不再把梯度传回原张量。"""
+    x = torch.tensor([1.0, 2.0], requires_grad=True)
+    y = x * 2
+    u = y.detach()          # 断图
+    z = (u * 3).sum()       # 只依赖 u
+    z.backward()
+    return {"x.grad": None if x.grad is None else x.grad.tolist()}
