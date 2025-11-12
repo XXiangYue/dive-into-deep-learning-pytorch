@@ -71,3 +71,20 @@ def detach_breaks_graph() -> dict:
     z = (u * 3).sum()       # 只依赖 u
     z.backward()
     return {"x.grad": None if x.grad is None else x.grad.tolist()}
+
+
+if __name__ == "__main__":
+    x = torch.tensor([1.0, 2.0])
+    j_manual = analytic_jacobian(x)
+    j_bwd = jacobian_by_backward(f, x)
+    j_vjp = jacobian_by_vjp(f, x)
+    print("手算雅可比:\n", j_manual)
+    print("backward 逐行:\n", j_bwd)
+    print("vjp 逐行:\n", j_vjp)
+    print("手算 vs backward:", torch.allclose(j_manual, j_bwd))
+    print("手算 vs vjp     :", torch.allclose(j_manual, j_vjp))
+
+    dy, d2y = second_order(2.0)
+    print(f"x=2 时 dy/dx={dy} (期望 12.0), d2y/dx2={d2y} (期望 12.0)")
+
+    print("detach 后:", detach_breaks_graph())
