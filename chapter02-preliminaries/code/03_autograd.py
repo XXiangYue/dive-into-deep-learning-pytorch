@@ -26,3 +26,29 @@ def analytic_jacobian(x: torch.Tensor) -> torch.Tensor:
         [x[1].item(), x[0].item()],
         [torch.cos(x[0]).item(), 0.0],
     ])
+
+
+def jacobian_by_backward(fn, x: torch.Tensor) -> torch.Tensor:
+    """对每个输出分量单独 backward，取该分量的梯度作为雅可比的一行。"""
+    rows = []
+    for i in range(fn(x).numel()):
+        xi = x.detach().clone().requires_grad_(True)
+        y = fn(xi)
+        # 只对第 i 个分量求导：把它当标量，其余分量乘 0
+        y[i].backward()
+        rows.append(xi.grad.detach().clone())
+    return torch.stack(rows)
+
+
+def jacobian_by_vjp(fn, x: torch.Tensor) -> torch.Tensor:
+    """用向量-雅可比积：backward 传单位向量 e_i，一次拿到一行。"""
+    rows = []
+    m = fn(x).numel()
+    for i in range(m):
+        xi = x.detach().clone().requires_grad_(True)
+        y = fn(xi)
+        v = torch.zeros(m)
+        v[i] = 1.0
+        y.backward(v)          # 等价于 v^T J
+        rows.append(xi.grad.detach().clone())
+    return torch.stack(rows)
