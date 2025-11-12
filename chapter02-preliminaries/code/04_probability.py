@@ -43,3 +43,20 @@ def multinomial_estimate(probs=(0.1, 0.2, 0.3, 0.4), n: int = 1000) -> dict:
         "empirical": [round(v, 4) for v in freq.tolist()],
         "l1_error": round(float((freq - p).abs().sum()), 4),
     }
+
+
+if __name__ == "__main__":
+    print("=== 大数定律：均匀骰子，理论均值 2.5 ===")
+    for n, mean, err in law_of_large_numbers():
+        print(f"n={n:<7} 经验均值={mean:.4f}  偏差={err:.4f}")
+
+    print()
+    print("=== 经验频率（n=100000）===")
+    freq = empirical_freq(sample_dice(100000))
+    print([round(v, 4) for v in freq.tolist()], "期望 0.1667")
+
+    print()
+    print("=== 多项分布估计 ===")
+    for n in (100, 1000, 10000):
+        r = multinomial_estimate(n=n)
+        print(f"n={n:<6} L1误差={r['l1_error']:.4f} 经验={r['empirical']}")
