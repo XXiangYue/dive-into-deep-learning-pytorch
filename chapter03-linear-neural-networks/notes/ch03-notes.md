@@ -150,3 +150,45 @@ param = param - lr * param.grad / batch_size # 错：只是把局部名字重新
 
 `param.grad.zero_()` 必须在更新**之后**。如果先清零再更新，那一步的梯度就是 None / 0，
 参数永远不动。更稳妥的写法是在循环开头清零，和 `optimizer.zero_grad()` 的位置一致。
+
+## 3.3 softmax 回归
+
+### 从回归到分类
+
+分类的输出是 $k$ 个类别的置信度（logits）$\mathbf{o} \in \mathbb{R}^k$。
+要把它变成概率分布，需要两个条件：非负、和为 1。
+
+$$\hat{y}_j = \mathrm{softmax}(\mathbf{o})_j = \frac{\exp(o_j)}{\sum_{l=1}^{k}\exp(o_l)}$$
+
+指数保证了非负，除以总和保证了归一化。而且它保序：$o_j$ 最大的那个类别概率也最大，
+所以预测类别可以直接 `argmax(o)`，不必先算 softmax——这是 3.7 简洁实现里
+`CrossEntropyLoss` 吃 logits 的原因。
+
+### one-hot 标签
+
+真实标签 $y$（一个整数下标）写成 one-hot 向量 $\mathbf{y}$，只有 $y$ 位置是 1。
+
+$$\mathbf{y} = [0, \dots, 1, \dots, 0]$$
+
+**为什么要 one-hot：** 因为交叉熵的定义是 $-\sum_j y_j \log \hat{y}_j$，
+用 one-hot 代进去只剩一项 $-\log \hat{y}_y$。如果直接用整数下标，
+$-\log \hat{y}_y$ 这个写法和 one-hot 版本完全等价，所以实现里存下标、计算时按索引取，
+省内存也省一次 one-hot 乘法。
+
+### 交叉熵
+
+$$l(\mathbf{y}, \hat{\mathbf{y}}) = -\sum_{j=1}^{k} y_j \log \hat{y}_j = -\log \hat{y}_y$$
+
+代入 softmax：
+
+$$l = -\log\frac{\exp(o_y)}{\sum_j \exp(o_j)} = -o_y + \log\sum_j \exp(o_j)$$
+
+**这个形式很关键：** 第一项 $-o_y$ 是「正确类别的 logit 越小损失越大」，
+第二项 $\log\sum_j e^{o_j}$ 是 log-sum-exp，起到「压制其他类别」的作用。
+两者合起来正好是我做对时 $l \to 0$、做错时 $l$ 很大。
+
+### 为什么不用平方损失做分类
+
+平方损失对 logits 的梯度会带一个 $\hat{y}_j(1 - \hat{y}_j)$ 的因子，
+当预测错得很离谱（$\hat{y}_y \approx 0$）时这个因子趋于 0，梯度消失，学不动。
+交叉熵的梯度没有这个问题（见下一条笔记）。这也是「损失函数要匹配输出分布」的例子。
