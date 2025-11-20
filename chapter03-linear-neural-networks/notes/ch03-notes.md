@@ -227,3 +227,36 @@ $$\hat{y}_j = \frac{\exp(o_j - \max_l o_l)}{\sum_l \exp(o_l - \max_l o_l)}$$
 
 数学上完全等价（分子分母同乘 $e^{-\max}$），但指数最大是 $\exp(0)=1$，不会溢出。
 交叉熵那边同理，要用 log-sum-exp 形式，不能先 softmax 再取 log。
+
+## 3.4 / 3.5 数据集：我为什么不用 Fashion-MNIST
+
+原书 3.5 节用框架自带的数据集接口下载 Fashion-MNIST，30MB，第一次运行要联网。
+我换成合成的三类二维高斯团：
+
+```python
+CENTERS = [[2.0, 2.0], [-2.0, 1.5], [0.0, -2.5]]
+X_k = torch.normal(CENTERS[k], std=0.7, size=(300, 2))
+```
+
+### 三个理由
+
+1. **可离线、可秒跑。** 900 个样本 × 2 维，CPU 上 10 个 epoch 一秒内跑完，
+   调超参不用等。
+2. **重点是机制不是图像。** softmax、one-hot、交叉熵、准确率这四件事跟输入是图像
+   还是二维点毫无关系。我在二维上还能把决策边界画出来（第 3.6 节末尾）。
+3. **可以控制难度。** 改 `std` 就能从「完全可分」调到「重叠严重」，
+   观察 acc 从 0.99 掉到 0.7 的过程，比在真实数据集上猜为什么掉更有用。
+
+### 和真实数据集对齐的地方
+
+- 标签用**整数下标** `torch.long`，形状 `(n,)`，不是 one-hot；
+- 训练集 / 验证集手动切 800 / 100，验证集不参与梯度；
+- 特征做标准化（减均值除标准差），因为 softmax 的 logits 对特征尺度敏感；
+- `DataLoader` 的用法和真实数据集完全一致，换成 Fashion-MNIST 只要改数据源。
+
+### 一个必须注意的点
+
+`torch.normal(mean_tensor, std, size)` 的签名和 `torch.normal(mean, std, size)` 不一样：
+传张量做均值时不能再传 `size`。我第一版写了
+`torch.normal(center, 0.7, (300, 2))` 直接 TypeError，正确写法是把 $n$ 放进 size 或者
+用 `center.expand(300, 2)` 先铺开。
