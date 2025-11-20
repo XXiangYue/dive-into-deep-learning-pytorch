@@ -192,3 +192,38 @@ $$l = -\log\frac{\exp(o_y)}{\sum_j \exp(o_j)} = -o_y + \log\sum_j \exp(o_j)$$
 平方损失对 logits 的梯度会带一个 $\hat{y}_j(1 - \hat{y}_j)$ 的因子，
 当预测错得很离谱（$\hat{y}_y \approx 0$）时这个因子趋于 0，梯度消失，学不动。
 交叉熵的梯度没有这个问题（见下一条笔记）。这也是「损失函数要匹配输出分布」的例子。
+
+### 交叉熵对 logits 的梯度（这一章最重要的推导）
+
+记 $S = \sum_{l} \exp(o_l)$，则 $\hat{y}_j = \exp(o_j)/S$。
+
+先算 softmax 自己的雅可比：
+
+$$\frac{\partial \hat{y}_j}{\partial o_i} = \frac{\exp(o_j)\cdot \mathbb{1}[i=j]\cdot S - \exp(o_j)\exp(o_i)}{S^2}
+= \hat{y}_j\left(\mathbb{1}[i=j] - \hat{y}_i\right)$$
+
+再对 $l = -\sum_j y_j \log \hat{y}_j$ 求导（$y$ 是 one-hot，$\sum_j y_j = 1$）：
+
+$$\frac{\partial l}{\partial o_i} = -\sum_j \frac{y_j}{\hat{y}_j}\cdot\frac{\partial \hat{y}_j}{\partial o_i}
+= -\sum_j \frac{y_j}{\hat{y}_j}\hat{y}_j\left(\mathbb{1}[i=j] - \hat{y}_i\right)
+= -\left(y_i - \hat{y}_i\sum_j y_j\right)$$
+
+$$\boxed{\frac{\partial l}{\partial o_i} = \hat{y}_i - y_i}$$
+
+**我为什么觉得这个结果漂亮：** 它和平方损失的梯度 $\hat{y} - y$ 形式完全一样，
+但这里的 $\hat{y}$ 是概率、没有那个 $p(1-p)$ 的衰减因子。所以预测错得越离谱，
+梯度越大，学得越快。这就是「交叉熵配 softmax」的标准答案。
+
+一个批量上的平均损失梯度是 $\frac{1}{n}\sum_i (\hat{\mathbf{y}}^{(i)} - \mathbf{y}^{(i)})$，
+在 torch 里就是 `(softmax(o) - onehot(y)).mean(dim=0)` —— 但实际不需要我手算，
+`nn.CrossEntropyLoss` 一次搞定。
+
+### 数值坑（这一章我在这里返工）
+
+$\exp(o)$ 在 $o \approx 90$ 时就超出 float32 上限（$3.4\times10^{38}$，$\ln$ 之后约 88.7）。
+logits 一大，softmax 直接输出 nan，loss 也是 nan。标准做法是先减去每行最大值：
+
+$$\hat{y}_j = \frac{\exp(o_j - \max_l o_l)}{\sum_l \exp(o_l - \max_l o_l)}$$
+
+数学上完全等价（分子分母同乘 $e^{-\max}$），但指数最大是 $\exp(0)=1$，不会溢出。
+交叉熵那边同理，要用 log-sum-exp 形式，不能先 softmax 再取 log。
