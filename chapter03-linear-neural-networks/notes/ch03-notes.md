@@ -46,3 +46,40 @@
 - 3.2 严格不看书写训练循环，卡住的地方就是没懂的；
 - 3.4 到 3.6 连着读，softmax 和交叉熵必须一起理解，拆开看都是玄学；
 - 3.7 只当 API 文档，但要验证「它内部已经做了 softmax」这件事。
+
+## 3.1 线性回归
+
+### 模型
+
+$$\hat{y} = \mathbf{w}^\top \mathbf{x} + b$$
+
+写成矩阵形式（一次算一个批量的 $n$ 个样本）：$\hat{\mathbf{y}} = \mathbf{X}\mathbf{w} + b$，
+其中 $\mathbf{X} \in \mathbb{R}^{n \times d}$，$\mathbf{w} \in \mathbb{R}^{d}$。
+注意 PyTorch 里 `nn.Linear(d, 1)` 的权重形状是 `(1, d)`，输出是 `(n, 1)`；
+我手写的时候用 `(d, 1)` 更顺手，两种写法都对，但要在一个文件里统一，别混。
+
+### 损失
+
+$$l^{(i)}(\mathbf{w}, b) = \frac{1}{2}\left(\hat{y}^{(i)} - y^{(i)}\right)^2, \qquad
+L(\mathbf{w}, b) = \frac{1}{n}\sum_{i=1}^{n} l^{(i)}(\mathbf{w}, b)$$
+
+### 对 $\mathbf{w}$ 的梯度
+
+令残差 $r^{(i)} = \hat{y}^{(i)} - y^{(i)}$，则
+
+$$\frac{\partial l^{(i)}}{\partial \mathbf{w}} = r^{(i)}\,\mathbf{x}^{(i)}, \qquad
+\frac{\partial L}{\partial \mathbf{w}} = \frac{1}{n}\sum_{i=1}^{n} r^{(i)}\,\mathbf{x}^{(i)} = \frac{1}{n}\mathbf{X}^\top(\hat{\mathbf{y}} - \mathbf{y})$$
+
+$$\frac{\partial L}{\partial b} = \frac{1}{n}\sum_{i=1}^{n} r^{(i)}$$
+
+**我为什么这么理解梯度：** $\mathbf{X}^\top \mathbf{r}$ 的意思是「每个特征拿自己的取值去
+乘上它造成的误差，再加起来」。哪个特征和误差的相关性大，它分到的梯度就大。
+这和第 2 章矩阵乘的列视角是一回事——$\mathbf{X}^\top\mathbf{r}$ 就是把 $\mathbf{r}$ 当成
+权重，对各列（各特征）做加权求和。
+
+### 一个具体的数
+
+$\mathbf{w}=[2, -3.4]$，$b=4.2$，噪声标准差 $0.01$，1000 个样本。
+损失理论下界是噪声方差的一半：$\frac{1}{2}\sigma^2 = 0.00005$。
+所以训练到 loss ≈ 5e-5 就到头了，再往下就是在拟合噪声。这个数我要记住，
+不然看到 loss 卡在 5e-5 会以为没收敛。
