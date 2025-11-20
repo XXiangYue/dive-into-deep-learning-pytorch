@@ -28,3 +28,34 @@ def load_array(features: torch.Tensor, labels: torch.Tensor,
     """把张量包成 DataLoader。is_train 决定要不要每个 epoch 打乱。"""
     dataset = data.TensorDataset(features, labels)
     return data.DataLoader(dataset, batch_size=batch_size, shuffle=is_train)
+
+
+def build_net(num_inputs: int = 2) -> nn.Module:
+    """单层线性回归：nn.Linear 内部就是 weight (1, d) 和 bias (1)。"""
+    net = nn.Sequential(nn.Linear(num_inputs, 1))
+    # 手动初始化，和从零版保持一致（默认初始化是均匀分布，量级不同）
+    net[0].weight.data.normal_(0, 0.01)
+    net[0].bias.data.fill_(0.0)
+    return net
+
+
+def train_concise(num_epochs: int, lr: float, batch_size: int,
+                  features: torch.Tensor, labels: torch.Tensor):
+    """简洁版训练循环：前向 → 算损失 → 清梯度 → 反传 → 更新。"""
+    net = build_net(features.shape[1])
+    loss = nn.MSELoss()        # 默认 reduction='mean'，已经除过 batch_size
+    trainer = torch.optim.SGD(net.parameters(), lr=lr)
+    loader = load_array(features, labels, batch_size)
+
+    history = []
+    for epoch in range(num_epochs):
+        for X, y in loader:
+            l = loss(net(X), y)     # 注意：这里不要再除 batch_size
+            trainer.zero_grad()
+            l.backward()
+            trainer.step()
+        with torch.no_grad():
+            epoch_loss = float(loss(net(features), labels))
+        history.append(epoch_loss)
+        print(f"epoch {epoch + 1:>2}, loss {epoch_loss:.6f}")
+    return net, history
