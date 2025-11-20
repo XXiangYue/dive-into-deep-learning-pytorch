@@ -35,3 +35,27 @@ def data_iter(batch_size: int, features: torch.Tensor, labels: torch.Tensor):
         # 最后一批可能不足 batch_size，用 min 截断
         batch_indices = torch.tensor(indices[i: min(i + batch_size, num_examples)])
         yield features[batch_indices], labels[batch_indices]
+
+
+def linreg(X: torch.Tensor, w: torch.Tensor, b: torch.Tensor) -> torch.Tensor:
+    """线性前向：X (n, d) @ w (d, 1) + b -> (n, 1)。"""
+    return X @ w + b
+
+
+def squared_loss(y_hat: torch.Tensor, y: torch.Tensor) -> torch.Tensor:
+    """平方损失，返回每个样本的损失向量（不求和也不平均）。
+
+    除以 2 是为了让梯度里的系数消掉，对最优解没有影响。
+    y.reshape(y_hat.shape) 是必须的：y 可能来自不同形状的切片。
+    """
+    return (y_hat - y.reshape(y_hat.shape)) ** 2 / 2
+
+
+def analytic_solution(features: torch.Tensor, labels: torch.Tensor) -> torch.Tensor:
+    """正规方程 w* = (X^T X)^{-1} X^T y，用来给 SGD 的结果做基准。
+
+    先把偏置并进 X（末尾加一列 1），一次解出 [w, b]。
+    """
+    ones = torch.ones(features.shape[0], 1)
+    X = torch.cat([features, ones], dim=1)
+    return torch.linalg.solve(X.T @ X, X.T @ labels).flatten()
