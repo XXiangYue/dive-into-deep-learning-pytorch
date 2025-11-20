@@ -115,3 +115,38 @@ $$\mathbf{w} \leftarrow \mathbf{w} - \frac{\eta}{|\mathcal{B}|}\sum_{i \in \math
 
 **梯度的无偏性**：$\mathbb{E}_{\mathcal{B}}[\frac{1}{|\mathcal{B}|}\sum_{i\in\mathcal{B}}\nabla l^{(i)}] = \nabla L$，
 所以小批量梯度是真实梯度的无偏估计，方差随批量增大而减小（约 $1/|\mathcal{B}|$）。
+
+## 3.2 从零实现：两个真实的坑
+
+### 坑一：`data_iter` 不打乱，loss 会台阶式下降
+
+第一版我忘了 `random.shuffle(indices)`，结果每个 epoch 都按同一顺序喂数据。
+现象很怪：loss 在 epoch 内部跳动很小，跨 epoch 才有明显下降，而且对学习率极其敏感。
+原因是同一批样本总是同时出现，梯度方向高度相关，等于把批量变小了。
+打乱之后 loss 曲线立刻平滑。
+
+### 坑二：`param -= lr * param.grad` 直接报错
+
+```text
+RuntimeError: a leaf Variable that requires grad is being used in an in-place operation.
+```
+
+`param` 是叶子节点且 `requires_grad=True`，`-=` 是原地操作，autograd 不许这么改它
+（它要留着旧值算梯度）。三种写法，我最后选了第一种：
+
+```python
+with torch.no_grad():          # 官方推荐：显式声明这段不建图
+    param -= lr * param.grad / batch_size
+    param.grad.zero_()
+
+param.data -= lr * param.grad / batch_size   # 也能跑，但绕过了 autograd 的检查
+param = param - lr * param.grad / batch_size # 错：只是把局部名字重新绑定，原参数没变
+```
+
+第三种最容易写错，而且不报错——训练照跑，参数就是不动。我第一次就是这么写的，
+跑了 5 个 epoch 发现 loss 一直是 4.2（正好是初始值附近），查了两小时。
+
+### 顺序也很重要
+
+`param.grad.zero_()` 必须在更新**之后**。如果先清零再更新，那一步的梯度就是 None / 0，
+参数永远不动。更稳妥的写法是在循环开头清零，和 `optimizer.zero_grad()` 的位置一致。
