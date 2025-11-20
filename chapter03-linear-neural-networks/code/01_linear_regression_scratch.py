@@ -59,3 +59,30 @@ def analytic_solution(features: torch.Tensor, labels: torch.Tensor) -> torch.Ten
     ones = torch.ones(features.shape[0], 1)
     X = torch.cat([features, ones], dim=1)
     return torch.linalg.solve(X.T @ X, X.T @ labels).flatten()
+
+
+def sgd(params: list, lr: float, batch_size: int) -> None:
+    """小批量随机梯度下降：用当前批量的梯度原地更新参数。
+
+    梯度已经在 backward 时按批量求和过，所以要除以 batch_size
+    才能让更新幅度和批量大小无关。
+    """
+    for param in params:
+        param -= lr * param.grad / batch_size
+        param.grad.zero_()
+
+
+def train(num_epochs: int, lr: float, batch_size: int, params: list,
+          features: torch.Tensor, labels: torch.Tensor) -> list:
+    """训练若干 epoch，返回每个 epoch 结束时的全量平均损失。"""
+    history = []
+    for epoch in range(num_epochs):
+        for X, y in data_iter(batch_size, features, labels):
+            loss = squared_loss(linreg(X, params[0], params[1]), y)
+            loss.sum().backward()      # 对批量求和再反传，梯度也是按批求和
+            sgd(params, lr, batch_size)
+        with torch.no_grad():
+            epoch_loss = float(squared_loss(linreg(features, params[0], params[1]), labels).mean())
+        history.append(epoch_loss)
+        print(f"epoch {epoch + 1:>2}, loss {epoch_loss:.6f}")
+    return history
