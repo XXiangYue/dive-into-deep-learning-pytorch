@@ -83,3 +83,35 @@ $\mathbf{w}=[2, -3.4]$，$b=4.2$，噪声标准差 $0.01$，1000 个样本。
 损失理论下界是噪声方差的一半：$\frac{1}{2}\sigma^2 = 0.00005$。
 所以训练到 loss ≈ 5e-5 就到头了，再往下就是在拟合噪声。这个数我要记住，
 不然看到 loss 卡在 5e-5 会以为没收敛。
+
+### 解析解
+
+把偏置并进 $\mathbf{w}$（在 $\mathbf{X}$ 末尾加一列全 1），损失对 $\mathbf{w}$ 求导置零：
+
+$$\nabla_{\mathbf{w}} \|\mathbf{X}\mathbf{w} - \mathbf{y}\|_2^2 = 2\mathbf{X}^\top(\mathbf{X}\mathbf{w} - \mathbf{y}) = \mathbf{0}$$
+
+$$\Rightarrow\quad \mathbf{X}^\top\mathbf{X}\mathbf{w} = \mathbf{X}^\top\mathbf{y}
+\quad\Rightarrow\quad \mathbf{w}^* = (\mathbf{X}^\top\mathbf{X})^{-1}\mathbf{X}^\top\mathbf{y}$$
+
+### 那为什么还要 SGD
+
+三个理由，按我自己的理解排序：
+
+1. **$\mathbf{X}^\top\mathbf{X}$ 是 $d \times d$ 的矩阵，求逆是 $O(d^3)$。**
+   深度学习里 $d$ 动辄上百万，这个代价不可接受。而 SGD 每步只要 $O(bd)$（$b$ 是批量）。
+2. **解析解只对平方损失成立。** 换成交叉熵、加上正则项、加上非线性层，就没有闭式解了。
+3. **数据可能装不进内存。** 解析解要看到全部 $\mathbf{X}$；SGD 一个批量就能更新一次。
+
+**我的判断：解析解的价值在于它是一个「可以对齐的基准」。**
+我先用解析解算出 $\mathbf{w}^*$，再跑 SGD，两者差多少就知道 SGD 实现对不对。
+`code/01` 里最后一步就是拿解析解对照的。
+
+### 小批量 SGD
+
+$$\mathbf{w} \leftarrow \mathbf{w} - \frac{\eta}{|\mathcal{B}|}\sum_{i \in \mathcal{B}} \nabla_{\mathbf{w}} l^{(i)}(\mathbf{w}, b)$$
+
+为什么除以 $|\mathcal{B}|$：让更新量的尺度和批量大小无关。
+不除的话，批量从 10 改到 100，有效学习率会涨 10 倍，这是调 batch size 时最常见的隐形坑。
+
+**梯度的无偏性**：$\mathbb{E}_{\mathcal{B}}[\frac{1}{|\mathcal{B}|}\sum_{i\in\mathcal{B}}\nabla l^{(i)}] = \nabla L$，
+所以小批量梯度是真实梯度的无偏估计，方差随批量增大而减小（约 $1/|\mathcal{B}|$）。
