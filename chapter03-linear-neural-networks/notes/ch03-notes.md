@@ -260,3 +260,31 @@ X_k = torch.normal(CENTERS[k], std=0.7, size=(300, 2))
 传张量做均值时不能再传 `size`。我第一版写了
 `torch.normal(center, 0.7, (300, 2))` 直接 TypeError，正确写法是把 $n$ 放进 size 或者
 用 `center.expand(300, 2)` 先铺开。
+
+## 3.6 / 3.7 简洁实现对照
+
+| 环节 | 从零版 | 简洁版 |
+|---|---|---|
+| 参数 | 手动 `torch.normal(..., requires_grad=True)` | `nn.Linear(2, 1)` 自动建参数 |
+| 前向 | `X @ w + b` | `net(X)` |
+| 损失 | `((y_hat - y)**2 / 2).mean()` | `nn.MSELoss()`（默认 mean） |
+| 更新 | `param -= lr * grad / batch_size` | `trainer.step()` |
+| 清零 | `param.grad.zero_()` | `trainer.zero_grad()` |
+| 批量 | 手写 `data_iter` | `DataLoader(TensorDataset(...))` |
+
+三个容易搞错的差别：
+
+1. **`MSELoss` 默认已经除过 batch size**（`reduction='mean'`）。
+   所以简洁版的 `l.backward()` 之后不用再除 `batch_size`，再除一次等于学习率缩小 10 倍。
+   我第一次照抄从零版的写法，`lr=0.03` 跑了 20 个 epoch 都没收敛，就是这个原因。
+2. **`nn.Linear(2, 1)` 的权重形状是 `(1, 2)`，不是 `(2, 1)`**。
+   对照真值时要 `net[0].weight.data.flatten()`，而不是直接比。
+3. **`CrossEntropyLoss` 内部已经做了 log-softmax**，喂给它的是 logits 不是概率。
+   我第一版把 `softmax(net(X))` 喂进去，loss 一直在 0.6 附近下不去——
+   等于做了两次 softmax，概率被压得更平。
+
+### 关于「从零版还有没有意义」
+
+有。写完从零版我才真正理解 `optimizer.step()` 里那个 `/batch_size` 是从哪来的，
+也才知道 `zero_grad()` 是必须的而不是可选的。第 4 章之后我全都用简洁版，
+但每章的从零版还是照写，因为要改网络结构的时候，知道自己改的是哪一行。
