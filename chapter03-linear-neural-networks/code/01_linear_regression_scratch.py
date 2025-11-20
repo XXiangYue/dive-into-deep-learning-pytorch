@@ -86,3 +86,26 @@ def train(num_epochs: int, lr: float, batch_size: int, params: list,
         history.append(epoch_loss)
         print(f"epoch {epoch + 1:>2}, loss {epoch_loss:.6f}")
     return history
+
+
+if __name__ == "__main__":
+    torch.manual_seed(42)
+    random.seed(42)
+
+    features, labels = synthetic_data(TRUE_W, TRUE_B, 1000)
+    # 参数用很小的随机数初始化，b 用 0。初始值太大的话前几个 batch 的损失会爆
+    w = torch.normal(0.0, 0.01, (2, 1), requires_grad=True)
+    b = torch.zeros(1, requires_grad=True)
+
+    history = train(num_epochs=5, lr=0.03, batch_size=10,
+                    params=[w, b], features=features, labels=labels)
+
+    print()
+    print("w 估计:", [round(v, 4) for v in w.detach().flatten().tolist()],
+          "真值:", TRUE_W.tolist())
+    print("b 估计:", round(b.detach().item(), 4), "真值:", TRUE_B)
+    print("loss 首末:", round(history[0], 6), "->", round(history[-1], 6))
+
+    # 用正规方程做基准：如果 SGD 写对了，两者的差应该在 1e-3 以内
+    exact = analytic_solution(features, labels)
+    print("解析解 [w1, w2, b]:", [round(v, 4) for v in exact.tolist()])
