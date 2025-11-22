@@ -4,6 +4,10 @@
 这样 softmax 的三个 logit 都有活干，能看出类别之间在互相竞争。
 
 用法：python code/03_softmax_scratch.py
+
+2025-11-22 修订：原版 softmax 直接算 exp(o)，lr 稍大 logit 到 120 就 exp 溢出成 inf，
+loss 变 nan（见 run-log）。现在改成先减每行最大值，并且交叉熵直接吃 logits、
+用 log-sum-exp 的形式算，全程不出现「先 softmax 再 log」的中间量。
 """
 
 import torch
@@ -43,20 +47,33 @@ def init_params(num_features: int = NUM_FEATURES, num_classes: int = NUM_CLASSES
     return W, b
 
 
-def softmax(o: torch.Tensor) -> torch.Tensor:
-    """按行归一化成概率：exp 之后除以行和。"""
-    return torch.exp(o) / torch.exp(o).sum(axis=1, keepdim=True)
-
-
 def net(X: torch.Tensor, W: torch.Tensor, b: torch.Tensor) -> torch.Tensor:
     """线性前向，返回 logits，形状 (n, k)。"""
     return X @ W + b
 
 
-def cross_entropy(y_hat: torch.Tensor, y: torch.Tensor) -> torch.Tensor:
-    """交叉熵：-log(正确类别的预测概率)，y_hat 是 softmax 之后的概率。"""
-    rows = torch.arange(len(y_hat))
-    return -torch.log(y_hat[rows, y])
+def softmax(o: torch.Tensor) -> torch.Tensor:
+    """按行归一化成概率。
+
+    先减去每行最大值：数学上完全等价（分子分母同乘 e^{-max}），
+    但指数最大只有 exp(0)=1，不会溢出成 inf。
+    """
+    o = o - o.max(dim=1, keepdim=True).values
+    exp = torch.exp(o)
+    return exp / exp.sum(dim=1, keepdim=True)
+
+
+def log_softmax(o: torch.Tensor) -> torch.Tensor:
+    """log(softmax(o)) 的稳定写法，交叉熵直接用这个。"""
+    shifted = o - o.max(dim=1, keepdim=True).values
+    # log-sum-exp 的位移版本：ln sum exp(shifted) 一定 <= ln k，不会炸
+    return shifted - torch.log(torch.exp(shifted).sum(dim=1, keepdim=True))
+
+
+def cross_entropy(o: torch.Tensor, y: torch.Tensor) -> torch.Tensor:
+    """交叉熵：直接吃 logits，内部用 log_softmax，避免先 softmax 再 log 的精度损失。"""
+    rows = torch.arange(len(o))
+    return -log_softmax(o)[rows, y]
 
 
 def accuracy(y_hat: torch.Tensor, y: torch.Tensor) -> float:
@@ -81,7 +98,7 @@ def train_softmax(num_epochs: int, lr: float, batch_size: int,
         for i in range(0, n, batch_size):
             Xb = X_shuf[i: i + batch_size]
             yb = y_shuf[i: i + batch_size]
-            l = cross_entropy(softmax(net(Xb, W, b)), yb)
+            l = cross_entropy(net(Xb, W, b), yb)
             l.sum().backward()
             with torch.no_grad():
                 W -= lr * W.grad / len(Xb)
@@ -89,7 +106,7 @@ def train_softmax(num_epochs: int, lr: float, batch_size: int,
                 W.grad.zero_()
                 b.grad.zero_()
         with torch.no_grad():
-            train_loss = float(cross_entropy(softmax(net(X_train, W, b)), y_train).mean())
+            train_loss = float(cross_entropy(net(X_train, W, b), y_train).mean())
             train_acc = accuracy(net(X_train, W, b), y_train)
             val_acc = accuracy(net(X_val, W, b), y_val)
         history.append((epoch + 1, train_loss, train_acc, val_acc))
@@ -115,6 +132,8 @@ if __name__ == "__main__":
     print("最终 b:", b.detach().tolist())
     print("验证集准确率:", round(history[-1][3], 4))
 
-    # 压力测试：把某个 logit 放大到 1000，看 softmax 会不会溢出
+    # 压力测试：减最大值之后，logit 再大也不会溢出
     big = torch.tensor([[1000.0, 0.0, 0.0]])
     print("大 logits 的 softmax:", softmax(big))
+    print("大 logits 的交叉熵（y=0）:", round(float(cross_entropy(big, torch.tensor([0]))), 6))
+    print("大 logits 的交叉熵（y=1）:", round(float(cross_entropy(big, torch.tensor([1]))), 4))
