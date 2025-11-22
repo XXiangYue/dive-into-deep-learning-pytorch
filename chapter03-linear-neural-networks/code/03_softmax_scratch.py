@@ -66,3 +66,33 @@ def accuracy(y_hat: torch.Tensor, y: torch.Tensor) -> float:
     else:
         pred = y_hat
     return float((pred == y).float().mean())
+
+
+def train_softmax(num_epochs: int, lr: float, batch_size: int,
+                  params: list, X_train: torch.Tensor, y_train: torch.Tensor,
+                  X_val: torch.Tensor, y_val: torch.Tensor) -> list:
+    """训练 softmax 回归，每个 epoch 打印训练损失与两边准确率。"""
+    W, b = params
+    history = []
+    n = len(X_train)
+    for epoch in range(num_epochs):
+        perm = torch.randperm(n)
+        X_shuf, y_shuf = X_train[perm], y_train[perm]
+        for i in range(0, n, batch_size):
+            Xb = X_shuf[i: i + batch_size]
+            yb = y_shuf[i: i + batch_size]
+            l = cross_entropy(softmax(net(Xb, W, b)), yb)
+            l.sum().backward()
+            with torch.no_grad():
+                W -= lr * W.grad / len(Xb)
+                b -= lr * b.grad / len(Xb)
+                W.grad.zero_()
+                b.grad.zero_()
+        with torch.no_grad():
+            train_loss = float(cross_entropy(softmax(net(X_train, W, b)), y_train).mean())
+            train_acc = accuracy(net(X_train, W, b), y_train)
+            val_acc = accuracy(net(X_val, W, b), y_val)
+        history.append((epoch + 1, train_loss, train_acc, val_acc))
+        print(f"epoch {epoch + 1:>2}  loss {train_loss:.4f}  "
+              f"train acc {train_acc:.3f}  val acc {val_acc:.3f}")
+    return history
