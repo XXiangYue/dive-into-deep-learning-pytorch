@@ -59,3 +59,20 @@ def train_concise(num_epochs: int, lr: float, batch_size: int,
         history.append(epoch_loss)
         print(f"epoch {epoch + 1:>2}, loss {epoch_loss:.6f}")
     return net, history
+
+
+if __name__ == "__main__":
+    torch.manual_seed(42)
+    features, labels = synthetic_data(TRUE_W, TRUE_B, 1000)
+
+    net, history = train_concise(num_epochs=5, lr=0.03, batch_size=10,
+                                 features=features, labels=labels)
+
+    w_hat = net[0].weight.data.flatten().tolist()
+    b_hat = net[0].bias.data.item()
+    print()
+    print("w 估计:", [round(v, 4) for v in w_hat], "真值:", TRUE_W.tolist())
+    print("b 估计:", round(b_hat, 4), "真值:", TRUE_B)
+    print("loss 首末:", round(history[0], 6), "->", round(history[-1], 6))
+    print("参数量:", sum(p.numel() for p in net.parameters()),
+          "（2 个权重 + 1 个偏置）")
