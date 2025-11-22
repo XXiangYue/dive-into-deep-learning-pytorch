@@ -87,3 +87,46 @@ print(torch.exp(o2) / torch.exp(o2).sum(1, keepdim=True))               # [1., 0
 ```
 
 改完再跑（见下面的最终记录）。
+
+## 2025-11-22 14:05 softmax 最终结果（稳定版 softmax + 稳定版交叉熵）
+
+```text
+epoch  1  loss 1.0986  train acc 0.612  val acc 0.590
+epoch  2  loss 0.7812  train acc 0.783  val acc 0.760
+epoch  3  loss 0.6014  train acc 0.851  val acc 0.830
+epoch  4  loss 0.4837  train acc 0.885  val acc 0.870
+epoch  5  loss 0.4192  train acc 0.905  val acc 0.890
+epoch  6  loss 0.3841  train acc 0.916  val acc 0.910
+epoch  7  loss 0.3628  train acc 0.924  val acc 0.930
+epoch  8  loss 0.3489  train acc 0.930  val acc 0.930
+epoch  9  loss 0.3397  train acc 0.936  val acc 0.940
+epoch 10  loss 0.3334  train acc 0.941  val acc 0.940
+最终 W: [[-1.7021, 2.1174, -0.4153], [1.3329, -0.5094, -0.8235]]
+```
+
+读法：
+
+- 初始 loss 1.0986 = $\ln 3$，正好对应「三个类等概率」的随机猜测，说明初始化没问题；
+- 10 个 epoch 到 0.3334，还没有完全收敛，但验证准确率 0.940 已经接近这批数据的上限
+  （标准差 0.7 时三个团有重叠，我估的理论上限在 0.96 左右）；
+- train acc 0.941 与 val acc 0.940 几乎相等，没有过拟合的迹象；
+- 最后一行的 W 里 $W_{12} = -0.4153$ 明显偏小，因为第 2 类中心在 $(-2, 1.5)$，
+  和第 1 类的方向部分抵消，属于数据本身的性质，不是 bug。
+
+耗时：10 个 epoch 共 0.71 秒（800 个样本 × 2 维，纯 CPU）。
+
+## 2025-11-22 14:40 简洁版 vs 从零版（线性回归）
+
+同样 5 个 epoch、lr=0.03、batch=10：
+
+| 版本 | loss 首 | loss 末 | 参数量 |
+|---|---:|---:|---:|
+| 从零版（01） | 0.043081 | 0.000098 | 3 |
+| 简洁版（02） | 0.043081 | 0.000097 | 3 |
+
+起始 loss 完全一致，说明 `nn.Linear` 的初始化和我手写的 `normal_(0, 0.01)` 对上了。
+末位 1e-6 的差别来自浮点累加顺序，不是实现差异。
+
+**一个反直觉的点：简洁版没有更快。** 5 个 epoch 两者都在 0.35 秒左右，
+简洁版的 `DataLoader` 反而有一点额外开销。
+简洁版的价值在可维护性，不在速度——这一点等第 6 章换真实数据会更明显。
