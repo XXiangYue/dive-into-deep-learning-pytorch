@@ -4,6 +4,11 @@
 全部手写：造数据、切批量、前向、平方损失、SGD、训练循环，不用 nn 也不用 optim。
 
 用法：python code/01_linear_regression_scratch.py
+
+2025-11-22 修订：sgd 里 `param -= lr * param.grad / batch_size` 报
+RuntimeError: a leaf Variable that requires grad is being used in an in-place operation.
+参数是叶子节点且需要梯度，autograd 记录的计算图依赖它的旧值，所以不许原地改。
+正确做法是把更新包在 torch.no_grad() 里，更新完立刻清零梯度。
 """
 
 import random
@@ -62,14 +67,17 @@ def analytic_solution(features: torch.Tensor, labels: torch.Tensor) -> torch.Ten
 
 
 def sgd(params: list, lr: float, batch_size: int) -> None:
-    """小批量随机梯度下降：用当前批量的梯度原地更新参数。
+    """小批量随机梯度下降。
 
-    梯度已经在 backward 时按批量求和过，所以要除以 batch_size
-    才能让更新幅度和批量大小无关。
+    关键点有三个：
+    1. no_grad()：参数是叶子节点，原地改必须关掉梯度追踪，否则直接抛 RuntimeError；
+    2. 除以 batch_size：grad 是按批量求和得到的，不除的话学习率会随批量线性变化；
+    3. 清零放最后：下一步的梯度从零开始累加，否则会一直叠加。
     """
-    for param in params:
-        param -= lr * param.grad / batch_size
-        param.grad.zero_()
+    with torch.no_grad():
+        for param in params:
+            param -= lr * param.grad / batch_size
+            param.grad.zero_()
 
 
 def train(num_epochs: int, lr: float, batch_size: int, params: list,
