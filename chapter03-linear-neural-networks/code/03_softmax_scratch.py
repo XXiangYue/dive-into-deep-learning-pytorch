@@ -96,3 +96,25 @@ def train_softmax(num_epochs: int, lr: float, batch_size: int,
         print(f"epoch {epoch + 1:>2}  loss {train_loss:.4f}  "
               f"train acc {train_acc:.3f}  val acc {val_acc:.3f}")
     return history
+
+
+if __name__ == "__main__":
+    torch.manual_seed(42)
+    X, y = make_blobs(n_per_class=300, std=0.7)
+    X = standardize(X)
+    # 800 / 100 切分，验证集不参与训练
+    X_train, y_train = X[:800], y[:800]
+    X_val, y_val = X[800:], y[800:]
+
+    W, b = init_params()
+    history = train_softmax(num_epochs=10, lr=0.1, batch_size=32,
+                            params=[W, b], X_train=X_train, y_train=y_train,
+                            X_val=X_val, y_val=y_val)
+    print()
+    print("最终 W:\n", W.detach())
+    print("最终 b:", b.detach().tolist())
+    print("验证集准确率:", round(history[-1][3], 4))
+
+    # 压力测试：把某个 logit 放大到 1000，看 softmax 会不会溢出
+    big = torch.tensor([[1000.0, 0.0, 0.0]])
+    print("大 logits 的 softmax:", softmax(big))
