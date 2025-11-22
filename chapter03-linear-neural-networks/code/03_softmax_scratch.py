@@ -41,3 +41,28 @@ def init_params(num_features: int = NUM_FEATURES, num_classes: int = NUM_CLASSES
     W = torch.normal(0.0, 0.01, (num_features, num_classes), requires_grad=True)
     b = torch.zeros(num_classes, requires_grad=True)
     return W, b
+
+
+def softmax(o: torch.Tensor) -> torch.Tensor:
+    """按行归一化成概率：exp 之后除以行和。"""
+    return torch.exp(o) / torch.exp(o).sum(axis=1, keepdim=True)
+
+
+def net(X: torch.Tensor, W: torch.Tensor, b: torch.Tensor) -> torch.Tensor:
+    """线性前向，返回 logits，形状 (n, k)。"""
+    return X @ W + b
+
+
+def cross_entropy(y_hat: torch.Tensor, y: torch.Tensor) -> torch.Tensor:
+    """交叉熵：-log(正确类别的预测概率)，y_hat 是 softmax 之后的概率。"""
+    rows = torch.arange(len(y_hat))
+    return -torch.log(y_hat[rows, y])
+
+
+def accuracy(y_hat: torch.Tensor, y: torch.Tensor) -> float:
+    """准确率：预测类别（argmax）等于真实标签的比例。"""
+    if y_hat.shape[1] > 1:
+        pred = y_hat.argmax(axis=1)
+    else:
+        pred = y_hat
+    return float((pred == y).float().mean())
