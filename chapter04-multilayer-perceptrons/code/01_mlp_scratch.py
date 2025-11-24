@@ -46,3 +46,38 @@ def init_params(num_inputs: int = NUM_INPUTS, num_hiddens: int = NUM_HIDDENS,
 def relu(X: torch.Tensor) -> torch.Tensor:
     """ReLU：负半轴取 0，正半轴原样。用 torch.max 实现，避免写 python if。"""
     return torch.max(X, torch.zeros_like(X))
+
+
+def mlp(X: torch.Tensor, params: list) -> torch.Tensor:
+    """前向：H = relu(X W1 + b1)，O = H W2 + b2。返回 logits。"""
+    W1, b1, W2, b2 = params
+    H = relu(X @ W1 + b1)
+    return H @ W2 + b2
+
+
+def train(params: list, X: torch.Tensor, y: torch.Tensor,
+          epochs: int = 30, lr: float = 0.1, batch_size: int = 20) -> list:
+    """手写训练循环，返回每个 epoch 的 (loss, acc)。
+
+    F.cross_entropy 默认 reduction='mean'，所以梯度已经是按批平均的，
+    更新时不要再除以 batch_size（和第 3 章从零版的写法不同，那里用的是 sum）。
+    """
+    history = []
+    for epoch in range(epochs):
+        perm = torch.randperm(len(X))
+        for i in range(0, len(X), batch_size):
+            idx = perm[i: i + batch_size]
+            loss = nn.functional.cross_entropy(mlp(X[idx], params), y[idx])
+            loss.backward()
+            with torch.no_grad():
+                for p in params:
+                    p -= lr * p.grad
+                    p.grad.zero_()
+        with torch.no_grad():
+            logits = mlp(X, params)
+            epoch_loss = float(nn.functional.cross_entropy(logits, y))
+            acc = float((logits.argmax(dim=1) == y).float().mean())
+        history.append((epoch_loss, acc))
+        if (epoch + 1) % 5 == 0:
+            print(f"epoch {epoch + 1:>2}  loss {epoch_loss:.4f}  acc {acc:.3f}")
+    return history
