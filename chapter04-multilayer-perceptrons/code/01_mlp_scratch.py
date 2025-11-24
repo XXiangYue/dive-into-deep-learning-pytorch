@@ -81,3 +81,35 @@ def train(params: list, X: torch.Tensor, y: torch.Tensor,
         if (epoch + 1) % 5 == 0:
             print(f"epoch {epoch + 1:>2}  loss {epoch_loss:.4f}  acc {acc:.3f}")
     return history
+
+
+def grad_norm(params: list) -> float:
+    """所有参数梯度的 L2 范数之和，用来衡量一步的更新幅度。"""
+    return float(sum(float(p.grad.norm()) for p in params))
+
+
+if __name__ == "__main__":
+    torch.manual_seed(42)
+    X, y = make_data()
+
+    # 第一步：只看初始化尺度对梯度范数的影响，各跑一个 batch
+    print("=== 初始化尺度 vs 第一步梯度范数 ===")
+    for scale in (None, 0.5, 1.0):
+        torch.manual_seed(42)
+        params = init_params(scale=scale)
+        loss = nn.functional.cross_entropy(mlp(X[:20], params), y[:20])
+        loss.backward()
+        tag = "Xavier" if scale is None else f"std={scale}"
+        print(f"{tag:<10} 初始 loss {float(loss):.4f}  梯度范数 {grad_norm(params):.2f}")
+
+    # 第二步：用 Xavier 正常训练
+    print()
+    print("=== Xavier 初始化，30 个 epoch ===")
+    torch.manual_seed(42)
+    params = init_params()
+    history = train(params, X, y, epochs=30, lr=0.1, batch_size=20)
+    print(f"最终 loss {history[-1][0]:.4f}  acc {history[-1][1]:.3f}")
+
+    # 参数量核对：d*h + h + h*q + q = 32+16+32+2 = 82
+    total = sum(p.numel() for p in params)
+    print("参数量:", total, "（W1 32 + b1 16 + W2 32 + b2 2）")
