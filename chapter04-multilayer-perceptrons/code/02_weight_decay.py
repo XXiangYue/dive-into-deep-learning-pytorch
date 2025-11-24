@@ -36,3 +36,33 @@ def make_data(n_train: int = NUM_TRAIN, n_test: int = NUM_TEST,
 def poly_features(x: torch.Tensor, degree: int = DEGREE) -> torch.Tensor:
     """把 (n, 1) 摊成 (n, degree+1)：[1, x, x^2, ...]。"""
     return torch.cat([x ** i for i in range(degree + 1)], dim=1)
+
+
+def fit(train, test, weight_decay: float = 0.0,
+        epochs: int = 200, lr: float = 0.01):
+    """训练一个线性层，返回 (net, 训练损失, 测试损失)。
+
+    weight_decay 直接交给 optim.SGD：它会在梯度上自动加 lambda * w。
+    注意这一版是对 net.parameters() 全体生效，包括 bias。
+    """
+    x_train, y_train = train
+    x_test, y_test = test
+    train_X, test_X = poly_features(x_train), poly_features(x_test)
+
+    net = nn.Sequential(nn.Linear(DEGREE + 1, 1))
+    net[0].weight.data.normal_(0.0, 0.01)
+    net[0].bias.data.fill_(0.0)
+
+    loss_fn = nn.MSELoss()
+    trainer = torch.optim.SGD(net.parameters(), lr=lr, weight_decay=weight_decay)
+
+    for _ in range(epochs):
+        trainer.zero_grad()
+        l = loss_fn(net(train_X), y_train)
+        l.backward()
+        trainer.step()
+
+    with torch.no_grad():
+        train_loss = float(loss_fn(net(train_X), y_train))
+        test_loss = float(loss_fn(net(test_X), y_test))
+    return net, train_loss, test_loss
