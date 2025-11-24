@@ -137,3 +137,32 @@ with torch.no_grad():
 从零版把四个参数放进一个 list，好处是更新和清零都是一个 for 循环；
 坏处是没有名字，调试时只能靠下标。第 5 章会用 `nn.Parameter` 和 `named_parameters()`
 解决这个问题——那一章就是专门讲「参数怎么管理」的。
+
+## 4.3 简洁实现：只有模型那一段变了
+
+```python
+net = nn.Sequential(nn.Flatten(), nn.Linear(2, 16), nn.ReLU(), nn.Linear(16, 2))
+
+def init_weights(m):
+    if isinstance(m, nn.Linear):
+        nn.init.normal_(m.weight, std=0.01)
+        nn.init.zeros_(m.bias)
+
+net.apply(init_weights)
+```
+
+三个观察：
+
+1. **`net.apply(fn)` 是深度优先递归**，对每个子模块调用一次 `fn`。
+   所以 `fn` 里必须自己判断类型，否则会对 `ReLU` 这类无参数层报错。
+2. **训练循环一个字都不用改。** 把 `net(X)` 换进去就行，因为交叉熵、优化器、
+   批量迭代都是通用的。我一开始又抄了一遍循环，白写了 20 行。
+3. **`Flatten()` 在这里其实没用**（输入已经是二维），但留着不亏：
+   后面换成图像数据（四维）时不用改结构。这是个习惯问题。
+
+### 初始化为什么要自己写
+
+`nn.Linear` 默认用 $U(-\sqrt{1/n_{in}}, \sqrt{1/n_{in}})$ 初始化，量级大概 $0.5/\sqrt{n_{in}}$。
+对 2→16 这种小层，默认值偏大，配合 lr=0.1 会让 loss 在前几个 batch 抖得厉害。
+我改成 `std=0.01` 是为了和从零版对齐，方便对照 loss 曲线——不是因为它更好。
+真正有理论依据的初始化是 4.7 的 Xavier。
