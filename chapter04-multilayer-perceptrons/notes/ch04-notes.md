@@ -286,3 +286,42 @@ $(1-p)\mathbb{E}[h_i]$；而推理期不丢任何单元，输出期望是 $\math
 把 dropout 看成对 $2^n$ 个「子网络」做集成（每个 mask 一个子网络），
 推理时用的是它们的平均。集成模型的方差比单个模型小，所以泛化更好。
 这个解释不严格（子网络共享参数，不是独立的），但方向是对的。
+
+## 4.7 数值稳定性与初始化
+
+### 梯度是连乘
+
+对 $L$ 层网络，第 1 层的梯度里含一个连乘：
+
+$$\frac{\partial \mathcal{L}}{\partial \mathbf{W}_1} = \prod_{l=2}^{L}\left(\mathbf{W}_l^\top \,\mathrm{diag}(\sigma'(\mathbf{z}_l))\right)\cdot\frac{\partial \mathcal{L}}{\partial \mathbf{o}}$$
+
+如果每个因子的谱范数都小于 1，$L$ 层之后梯度按指数衰减（消失）；
+都大于 1 则指数增长（爆炸）。**所以「深」这件事本身就是数值问题**，
+不是调调学习率能解决的，第 7 章的 ResNet 正是从结构上给了一条恒等捷径。
+
+### 前向的方差也要稳
+
+设输入 $x_j$ 独立同分布、均值 0、方差 $\gamma^2$，权重 $w_{ij}$ 均值 0 方差 $\sigma^2$，
+则隐藏层输出 $h_i = \sum_{j=1}^{n_{in}} w_{ij}x_j$ 的方差是
+
+$$\mathrm{Var}[h_i] = \sum_{j=1}^{n_{in}}\mathrm{Var}[w_{ij}x_j] = n_{in}\,\sigma^2\gamma^2$$
+
+要让 $\mathrm{Var}[h_i] = \gamma^2$，需要 $n_{in}\sigma^2 = 1$，即 $\sigma = 1/\sqrt{n_{in}}$。
+
+### Xavier 为什么是 $2/(n_{in}+n_{out})$
+
+上面只保证了前向；反向时梯度经过 $\mathbf{W}^\top$，需要 $n_{out}\sigma^2 = 1$。
+两个条件不能同时满足（除非 $n_{in} = n_{out}$），折中取平均：
+
+$$\frac{1}{2}\left(\frac{1}{n_{in}} + \frac{1}{n_{out}}\right) = \frac{n_{in}+n_{out}}{2n_{in}n_{out}}
+\quad\Longrightarrow\quad \sigma^2 = \frac{2}{n_{in}+n_{out}}$$
+
+所以 Xavier 用的是「输入维度与输出维度的调和平均」。它假设激活函数在 0 附近近似线性，
+对 tanh/sigmoid 合适；ReLU 把一半激活砍掉了，方差变成一半，所以要乘 2：
+$\sigma^2 = 2/n_{in}$（Kaiming 初始化）。**这就是「初始化和激活函数配套」的意思。**
+
+### 实测
+
+`code/01` 里我把 init 的标准差设成 1.0（相当于 $n_{in}\sigma^2 = 2$ 的 16 倍），
+第一个 batch 的梯度范数就到了 1.2e3，第二个 epoch loss 直接 nan。
+换成 Xavier 之后梯度范数稳定在 0.8 附近，30 个 epoch 收敛到 0.94。
