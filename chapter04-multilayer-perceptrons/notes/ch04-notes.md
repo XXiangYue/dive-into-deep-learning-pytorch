@@ -58,3 +58,44 @@
 4.1 和 4.4 是概念，读一遍 + 自己举反例；
 4.2、4.5、4.6 必须动手，因为「为什么这么写」只有写错过才知道；
 4.7 只求能解释现象，不追求推完整的初始化理论。
+
+## 4.1 隐藏层与激活函数
+
+### 两层网络的定义
+
+$$\mathbf{H} = \sigma(\mathbf{X}\mathbf{W}_1 + \mathbf{b}_1), \qquad
+\mathbf{O} = \mathbf{H}\mathbf{W}_2 + \mathbf{b}_2$$
+
+$\mathbf{X} \in \mathbb{R}^{n\times d}$，$\mathbf{W}_1 \in \mathbb{R}^{d\times h}$，
+$\mathbf{W}_2 \in \mathbb{R}^{h\times q}$。若 $\sigma$ 是恒等映射，则
+
+$$\mathbf{O} = (\mathbf{X}\mathbf{W}_1 + \mathbf{b}_1)\mathbf{W}_2 + \mathbf{b}_2
+= \mathbf{X}\underbrace{(\mathbf{W}_1\mathbf{W}_2)}_{\mathbf{W}'} + \underbrace{(\mathbf{b}_1\mathbf{W}_2 + \mathbf{b}_2)}_{\mathbf{b}'}$$
+
+也就是说，**两层仿射变换的复合等价于一层**，参数量从 $dh + hq$ 退化成 $dq$，
+表达能力反而下降。所以激活函数不是「加个点缀」，它是隐藏层存在的唯一理由。
+
+### 三个激活函数
+
+$$\mathrm{ReLU}(x) = \max(x, 0), \qquad
+\mathrm{sigmoid}(x) = \frac{1}{1+e^{-x}}, \qquad
+\tanh(x) = \frac{e^x - e^{-x}}{e^x + e^{-x}}$$
+
+导数：
+
+$$\mathrm{ReLU}'(x) = \mathbb{1}[x > 0], \qquad
+\mathrm{sigmoid}'(x) = \mathrm{sigmoid}(x)\left(1 - \mathrm{sigmoid}(x)\right) \le \frac{1}{4}$$
+
+**我为什么选 ReLU 做默认：** sigmoid 的导数最大只有 0.25，多层连乘之后梯度按
+$0.25^L$ 衰减，10 层就是 $10^{-6}$；ReLU 在正半轴的导数恒为 1，梯度不会因为层数衰减。
+代价是负半轴梯度为 0（「神经元死亡」），实践里靠小学习率和合理初始化避开。
+
+ReLU 在 $x=0$ 处不可导，PyTorch 里取次梯度 0。理论上不严谨，实践上完全没问题——
+随机初始化下恰好落在 0 的概率是 0。
+
+### 通用近似定理
+
+含一个隐藏层、足够多神经元的网络可以以任意精度逼近紧集上的连续函数。
+**我的判断：这个定理不该被过度解读。** 它只说「存在」，没说「梯度下降能找到」，
+也没说「需要多少神经元」。所以「理论上一个隐藏层就够」这句话对实践没有指导意义，
+真正决定深度的是「表示效率」：深网络用指数少的参数表达某些函数。
