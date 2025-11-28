@@ -6,6 +6,11 @@
 - 模型把输入摊成 21 维特征 [1, x, x^2, ..., x^20]，再接一个线性层。
   21 个参数 vs 20 个样本，几乎可以插值，过拟合是必然的。
 
+2025-11-28 修订：第一版把 weight_decay 直接传给 SGD(net.parameters(), ...)，
+bias 也被衰减，等于硬逼模型穿过原点。真实函数均值在 5 左右，
+结果 train/test 损失一起变大，把正则做成了欠拟合（见 run-log）。
+现在用参数组把 bias 的 weight_decay 设为 0。
+
 用法：python code/02_weight_decay.py
 """
 
@@ -38,12 +43,12 @@ def poly_features(x: torch.Tensor, degree: int = DEGREE) -> torch.Tensor:
     return torch.cat([x ** i for i in range(degree + 1)], dim=1)
 
 
-def fit(train, test, weight_decay: float = 0.0,
+def fit(train, test, weight_decay: float = 0.0, decay_bias: bool = False,
         epochs: int = 200, lr: float = 0.01):
     """训练一个线性层，返回 (net, 训练损失, 测试损失)。
 
-    weight_decay 直接交给 optim.SGD：它会在梯度上自动加 lambda * w。
-    注意这一版是对 net.parameters() 全体生效，包括 bias。
+    decay_bias=False 时用参数组把 bias 的 weight_decay 置 0：
+    偏置只控制整体平移，放大不了输入的差异，衰减它只会伤害拟合。
     """
     x_train, y_train = train
     x_test, y_test = test
@@ -54,7 +59,11 @@ def fit(train, test, weight_decay: float = 0.0,
     net[0].bias.data.fill_(0.0)
 
     loss_fn = nn.MSELoss()
-    trainer = torch.optim.SGD(net.parameters(), lr=lr, weight_decay=weight_decay)
+    groups = [
+        {"params": [net[0].weight], "weight_decay": weight_decay},
+        {"params": [net[0].bias], "weight_decay": weight_decay if decay_bias else 0.0},
+    ]
+    trainer = torch.optim.SGD(groups, lr=lr)
 
     for _ in range(epochs):
         trainer.zero_grad()
@@ -88,3 +97,10 @@ if __name__ == "__main__":
     net, _, _ = fit(train_set, test_set, weight_decay=0.0)
     print("不衰减时前 6 个权重:",
           [round(v, 2) for v in net[0].weight.data.flatten()[:6].tolist()])
+
+    # 再确认一次「衰减 bias 的坏处」：同一组超参，两种做法的测试损失
+    _, tr_a, te_a = fit(train_set, test_set, weight_decay=1e-2, decay_bias=True)
+    _, tr_b, te_b = fit(train_set, test_set, weight_decay=1e-2, decay_bias=False)
+    print()
+    print(f"wd=1e-2 衰减 bias  : train {tr_a:.4f}  test {te_a:.4f}")
+    print(f"wd=1e-2 不衰减 bias: train {tr_b:.4f}  test {te_b:.4f}")
