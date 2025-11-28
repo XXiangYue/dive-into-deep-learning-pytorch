@@ -36,3 +36,26 @@ def init_mlp(num_inputs: int = 2, num_hiddens: int = NUM_HIDDENS, num_outputs: i
         rand((num_hiddens, num_outputs), num_hiddens, num_outputs),
         torch.zeros(num_outputs, requires_grad=True),
     ]
+
+
+def dropout_layer(X: torch.Tensor, dropout: float, is_training: bool) -> torch.Tensor:
+    """以概率 dropout 把元素置零。
+
+    这是第一版：训练时随机置零，推理时原样输出。
+    """
+    if not is_training:
+        return X
+    # (rand > dropout) 生成 Bernoulli(1-dropout) 的 mask
+    mask = (torch.rand(X.shape) > dropout).float()
+    return X * mask
+
+
+def mlp(X: torch.Tensor, params: list, dropout: float = 0.0,
+        is_training: bool = True) -> torch.Tensor:
+    """前向：两层隐藏层，每层后接 ReLU 和 dropout。"""
+    W1, b1, W2, b2, W3, b3 = params
+    H1 = torch.max(X @ W1 + b1, torch.zeros_like(X @ W1 + b1))
+    H1 = dropout_layer(H1, dropout, is_training)
+    H2 = torch.max(H1 @ W2 + b2, torch.zeros_like(H1 @ W2 + b2))
+    H2 = dropout_layer(H2, dropout, is_training)
+    return H2 @ W3 + b3
