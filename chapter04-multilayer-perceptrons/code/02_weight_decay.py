@@ -66,3 +66,25 @@ def fit(train, test, weight_decay: float = 0.0,
         train_loss = float(loss_fn(net(train_X), y_train))
         test_loss = float(loss_fn(net(test_X), y_test))
     return net, train_loss, test_loss
+
+
+if __name__ == "__main__":
+    torch.manual_seed(42)
+    train_set, test_set = make_data()
+    print(f"训练集 {NUM_TRAIN} 个点，测试集 {NUM_TEST} 个点，"
+          f"特征维度 {DEGREE + 1}，参数量 {DEGREE + 2}")
+    print()
+    print(f"{'weight_decay':>14}{'train_loss':>12}{'test_loss':>12}{'gap':>10}")
+    for wd in (0.0, 1e-4, 1e-2, 1e-1):
+        net, tr, te = fit(train_set, test_set, weight_decay=wd)
+        print(f"{wd:>14.0e}{tr:>12.4f}{te:>12.4f}{te - tr:>10.4f}")
+
+    # 权重范数：不衰减 vs 1e-2，看正则把权重压小了多少
+    print()
+    for wd in (0.0, 1e-2):
+        net_wd, _, _ = fit(train_set, test_set, weight_decay=wd)
+        norm = float(net_wd[0].weight.data.norm())
+        print(f"wd={wd:.0e} 权重 L2 范数: {norm:.2f}")
+    net, _, _ = fit(train_set, test_set, weight_decay=0.0)
+    print("不衰减时前 6 个权重:",
+          [round(v, 2) for v in net[0].weight.data.flatten()[:6].tolist()])
