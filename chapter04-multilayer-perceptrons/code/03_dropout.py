@@ -59,3 +59,57 @@ def mlp(X: torch.Tensor, params: list, dropout: float = 0.0,
     H2 = torch.max(H1 @ W2 + b2, torch.zeros_like(H1 @ W2 + b2))
     H2 = dropout_layer(H2, dropout, is_training)
     return H2 @ W3 + b3
+
+
+def train(dropout: float, X: torch.Tensor, y: torch.Tensor,
+          epochs: int = 60, lr: float = 0.1, batch_size: int = 20):
+    """训练一个配置，返回 (最终训练损失, 最终训练准确率, 验证损失, 验证准确率)。
+
+    这里用 8:2 切分做验证，验证集不参与梯度。
+    """
+    torch.manual_seed(42)
+    params = init_mlp()
+    n_train = int(len(X) * 0.8)
+    X_tr, y_tr = X[:n_train], y[:n_train]
+    X_va, y_va = X[n_train:], y[n_train:]
+
+    for _ in range(epochs):
+        perm = torch.randperm(n_train)
+        for i in range(0, n_train, batch_size):
+            idx = perm[i: i + batch_size]
+            loss = nn.functional.cross_entropy(
+                mlp(X_tr[idx], params, dropout, is_training=True), y_tr[idx])
+            loss.backward()
+            with torch.no_grad():
+                for p in params:
+                    p -= lr * p.grad
+                    p.grad.zero_()
+
+    with torch.no_grad():
+        # 验证时 is_training=False，不丢神经元
+        tr_logits = mlp(X_tr, params, dropout, is_training=False)
+        va_logits = mlp(X_va, params, dropout, is_training=False)
+        tr_loss = float(nn.functional.cross_entropy(tr_logits, y_tr))
+        va_loss = float(nn.functional.cross_entropy(va_logits, y_va))
+        tr_acc = float((tr_logits.argmax(1) == y_tr).float().mean())
+        va_acc = float((va_logits.argmax(1) == y_va).float().mean())
+    return tr_loss, tr_acc, va_loss, va_acc
+
+
+if __name__ == "__main__":
+    torch.manual_seed(42)
+    X, y = make_data()
+    print(f"{'dropout':>8}{'train_loss':>12}{'train_acc':>11}{'val_loss':>10}{'val_acc':>9}")
+    for p in (0.0, 0.2, 0.5):
+        tr_loss, tr_acc, va_loss, va_acc = train(p, X, y)
+        print(f"{p:>8.1f}{tr_loss:>12.4f}{tr_acc:>11.3f}{va_loss:>10.4f}{va_acc:>9.3f}")
+
+    # 再看一次「训练模式和推理模式的输出差多少」
+    torch.manual_seed(42)
+    params = init_mlp()
+    h = X[:5] @ params[0] + params[1]
+    h = torch.max(h, torch.zeros_like(h))
+    print()
+    print("同一批隐藏层激活在两种模式下的均值:")
+    print("  训练模式:", round(float(dropout_layer(h, 0.5, True).mean()), 4))
+    print("  推理模式:", round(float(dropout_layer(h, 0.5, False).mean()), 4))
