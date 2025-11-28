@@ -4,6 +4,10 @@
 dropout 的效果才看得出来。
 
 用法：python code/03_dropout.py
+
+2025-11-28 修订：第一版训练时只置零、不做缩放，推理时原样输出，
+两层叠加后激活被放大到 1/(1-p)^2 倍，验证损失反而比不用 dropout 更差（见 run-log）。
+现在改成 inverted dropout：训练时除以 (1-p)，推理时原样，两边的期望一致。
 """
 
 import torch
@@ -39,31 +43,37 @@ def init_mlp(num_inputs: int = 2, num_hiddens: int = NUM_HIDDENS, num_outputs: i
 
 
 def dropout_layer(X: torch.Tensor, dropout: float, is_training: bool) -> torch.Tensor:
-    """以概率 dropout 把元素置零。
+    """inverted dropout。
 
-    这是第一版：训练时随机置零，推理时原样输出。
+    训练：按概率 dropout 置零，剩下的元素除以 (1-dropout)，
+          这样输出的期望和推理时完全一致。
+    推理：原样返回，不做任何缩放（inverted 的好处就是推理无额外操作）。
+
+    注意 dropout=0 时必须短路：否则 mask 会在需要梯度的地方乘 0，浪费计算；
+    dropout=1 时除以 0 会得到 inf，直接拒绝。
     """
-    if not is_training:
+    assert 0.0 <= dropout < 1.0, "dropout 概率必须在 [0, 1) 内"
+    if not is_training or dropout == 0.0:
         return X
-    # (rand > dropout) 生成 Bernoulli(1-dropout) 的 mask
+    # (rand > p) 得到 Bernoulli(1-p) 的 mask，均值是 1-p
     mask = (torch.rand(X.shape) > dropout).float()
-    return X * mask
+    return X * mask / (1.0 - dropout)
 
 
 def mlp(X: torch.Tensor, params: list, dropout: float = 0.0,
         is_training: bool = True) -> torch.Tensor:
     """前向：两层隐藏层，每层后接 ReLU 和 dropout。"""
     W1, b1, W2, b2, W3, b3 = params
-    H1 = torch.max(X @ W1 + b1, torch.zeros_like(X @ W1 + b1))
-    H1 = dropout_layer(H1, dropout, is_training)
-    H2 = torch.max(H1 @ W2 + b2, torch.zeros_like(H1 @ W2 + b2))
-    H2 = dropout_layer(H2, dropout, is_training)
+    Z1 = X @ W1 + b1
+    H1 = dropout_layer(torch.max(Z1, torch.zeros_like(Z1)), dropout, is_training)
+    Z2 = H1 @ W2 + b2
+    H2 = dropout_layer(torch.max(Z2, torch.zeros_like(Z2)), dropout, is_training)
     return H2 @ W3 + b3
 
 
 def train(dropout: float, X: torch.Tensor, y: torch.Tensor,
           epochs: int = 60, lr: float = 0.1, batch_size: int = 20):
-    """训练一个配置，返回 (最终训练损失, 最终训练准确率, 验证损失, 验证准确率)。
+    """训练一个配置，返回 (训练损失, 训练准确率, 验证损失, 验证准确率)。
 
     这里用 8:2 切分做验证，验证集不参与梯度。
     """
@@ -86,7 +96,7 @@ def train(dropout: float, X: torch.Tensor, y: torch.Tensor,
                     p.grad.zero_()
 
     with torch.no_grad():
-        # 验证时 is_training=False，不丢神经元
+        # 验证时 is_training=False，不丢神经元也不缩放
         tr_logits = mlp(X_tr, params, dropout, is_training=False)
         va_logits = mlp(X_va, params, dropout, is_training=False)
         tr_loss = float(nn.functional.cross_entropy(tr_logits, y_tr))
@@ -104,12 +114,12 @@ if __name__ == "__main__":
         tr_loss, tr_acc, va_loss, va_acc = train(p, X, y)
         print(f"{p:>8.1f}{tr_loss:>12.4f}{tr_acc:>11.3f}{va_loss:>10.4f}{va_acc:>9.3f}")
 
-    # 再看一次「训练模式和推理模式的输出差多少」
+    # 验证「两种模式的输出期望一致」——这是本次修订的核心
     torch.manual_seed(42)
     params = init_mlp()
-    h = X[:5] @ params[0] + params[1]
-    h = torch.max(h, torch.zeros_like(h))
+    Z1 = X[:5] @ params[0] + params[1]
+    H1 = torch.max(Z1, torch.zeros_like(Z1))
     print()
-    print("同一批隐藏层激活在两种模式下的均值:")
-    print("  训练模式:", round(float(dropout_layer(h, 0.5, True).mean()), 4))
-    print("  推理模式:", round(float(dropout_layer(h, 0.5, False).mean()), 4))
+    print("同一批隐藏层激活在两种模式下的均值（期望应接近）:")
+    print("  训练模式:", round(float(dropout_layer(H1, 0.5, True).mean()), 4))
+    print("  推理模式:", round(float(dropout_layer(H1, 0.5, False).mean()), 4))
