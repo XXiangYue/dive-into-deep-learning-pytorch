@@ -83,3 +83,52 @@ class MySequential(nn.Module):
 块里可以放块，所以 `net` 其实是一棵树。`parameters()` 是深度优先递归遍历整棵树，
 `named_parameters()` 给每个参数一个带路径的名字，比如 `net.0.weight`。
 **这个名字就是 `state_dict` 的键**，所以 5.5 节能直接对上——这是同一套机制的两面。
+
+## 5.2 参数管理
+
+### 三种写法的区别
+
+```python
+class A(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.w = nn.Parameter(torch.randn(3, 3))        # 注册 ✔
+        self.b = [nn.Parameter(torch.randn(3, 3))]      # 不注册 ✘（list 里）
+        self.c = nn.ParameterList([nn.Parameter(...)])  # 注册 ✔
+        self.d = nn.ModuleList([nn.Linear(2, 2)])       # 注册 ✔
+        self.e = nn.Linear(2, 2)                        # 注册 ✔
+```
+
+原因在 `nn.Module.__setattr__`：它只对几种类型做特殊处理——
+`Parameter`、`Module`、`ParameterList` / `ModuleList` / `ModuleDict` 等容器。
+赋值给一个普通 `list` 时，走的是 object 的默认 `__setattr__`，
+`_parameters` 字典里什么都不会多。
+
+**这个坑最阴的地方是它不报错。** `forward` 里照样能用 `self.b[0]`，
+张量照样参与计算，梯度照样能算出来（`nn.Parameter` 本身就 `requires_grad=True`），
+唯独 `optimizer` 拿不到它 → **这个参数永远不更新，而且没有任何警告。**
+我在 `code/02` 里就是这么写的，跑完发现共享矩阵一个 epoch 没变过。
+
+### 自查手段
+
+```python
+print(sum(p.numel() for p in net.parameters()))     # 参数量对不对
+for name, p in net.named_parameters():              # 名字有没有缺
+    print(name, tuple(p.shape), p.requires_grad)
+```
+
+我现在的习惯是：写完一个自定义块，先打印一遍 `named_parameters()`，
+把参数量和手算的对一遍，再开始训练。这一步只花 10 秒，能省两小时。
+
+### 参数共享
+
+同一个 `nn.Module` 在 `Sequential` 里出现两次，参数只存一份：
+
+```python
+shared = nn.Linear(8, 8)
+net = nn.Sequential(nn.Linear(4, 8), nn.ReLU(), shared, nn.ReLU(), shared, nn.ReLU(), nn.Linear(8, 2))
+```
+
+`parameters()` 默认 `remove_duplicate=True`，所以 8→8 那层只算一次。
+参数量：$4\times8+8 + 8\times8+8 + 8\times2+2 = 40 + 72 + 18 = 130$。
+共享的好处是省参数、并且强制两组变换用同一个映射（类似权重绑定）。
