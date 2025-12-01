@@ -45,3 +45,41 @@
 5.1 和 5.2 是原理，必须读透（尤其是 `__setattr__` 那段）；
 5.3 延后初始化知道有这回事就行，我很少用 `LazyLinear`；
 5.4 ~ 5.6 全部动手写，因为 API 细节记不住，写一遍就有肌肉记忆了。
+
+## 5.1 层和块
+
+### 一个块要干三件事
+
+1. **存参数**：`nn.Parameter` 类型的属性会被登记到 `self._parameters`；
+2. **算前向**：子类必须实现 `forward`，`__call__` 里会做一些 hook 相关的准备再调它；
+3. **报结构**：`__repr__` 递归打印子模块树，`print(net)` 看到的就是这棵树。
+
+第三点最容易被忽略。第 4 章我写 `MLPBlock` 时把两层压在一个 `forward` 里，
+训练完全正常，但 `print(block)` 只有一行，`block.children()` 是空的，
+既不能按层初始化，也不能按层查看梯度。**块的价值不在于封装，在于结构可见。**
+
+### 自定义容器的关键
+
+```python
+class MySequential(nn.Module):
+    def __init__(self, *args):
+        super().__init__()
+        for idx, module in enumerate(args):
+            self.add_module(str(idx), module)     # 关键在这一行
+
+    def forward(self, X):
+        for module in self._modules.values():
+            X = module(X)
+        return X
+```
+
+`add_module` 做了两件事：把模块写进 `self._modules`，并把它名字登记到 `_modules` 字典里。
+如果写成 `self.layers = list(args)`，参数就完全不会被注册——
+`parameters()` 返回空，`optim.SGD` 会报 `optimizer got an empty parameter list`。
+这和第 5.2 节的坑是同一个机制。
+
+### 嵌套
+
+块里可以放块，所以 `net` 其实是一棵树。`parameters()` 是深度优先递归遍历整棵树，
+`named_parameters()` 给每个参数一个带路径的名字，比如 `net.0.weight`。
+**这个名字就是 `state_dict` 的键**，所以 5.5 节能直接对上——这是同一套机制的两面。
