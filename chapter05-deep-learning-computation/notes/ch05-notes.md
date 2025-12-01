@@ -171,3 +171,47 @@ print(net[0].weight.shape)  # torch.Size([8, 4])
 因为「不知道输入维度」通常说明我没有先把数据形状算清楚，
 而形状算不清是后面所有 bug 的源头（第 6 章卷积尤其）。知道它在哪、
 知道它为什么报 `has not been initialized` 就够了。
+
+## 5.4 自定义层
+
+### 无参层：CenteredLayer
+
+```python
+class CenteredLayer(nn.Module):
+    def forward(self, X):
+        return X - X.mean()
+```
+
+没有参数，但仍然要继承 `nn.Module`，因为要能塞进 `Sequential`、能被 `print` 出来、
+能作为其他块的子模块。`parameters()` 返回空列表，这是合法的。
+
+注意 `X.mean()` 是对**所有元素**求均值，不是按样本求均值。d2l 的例子就是全局均值，
+用在「减去整体偏移」的场景。如果要按样本中心化，得写 `X.mean(dim=1, keepdim=True)`。
+这两种我都在 `code/01` 里试了一遍，数值差别很明显。
+
+### 带参层：MyLinear 与形状约定
+
+```python
+class MyLinear(nn.Module):
+    def __init__(self, in_units, units):
+        super().__init__()
+        self.weight = nn.Parameter(torch.randn(in_units, units) * 0.01)
+        self.bias = nn.Parameter(torch.zeros(units))
+
+    def forward(self, X):
+        return X @ self.weight + self.bias
+```
+
+**形状约定是个真实的坑。** PyTorch 官方的 `nn.Linear(in, out)` 内部
+`weight` 形状是 `(out, in)`，前向是 `X @ weight.T`；我习惯写 `(in, out)`，前向是 `X @ weight`。
+两种都对，但一个文件里必须统一。第 3 章我混着用过一次，
+结果 `state_dict` 加载时形状不匹配，报
+`size mismatch for weight: copying a param with shape torch.Size([8, 4]) from checkpoint,
+the shape in current model is torch.Size([4, 8])`。
+
+### 初始化要自己写
+
+`nn.Parameter(torch.randn(...))` 的默认尺度是标准正态，太大。
+第 4 章测过，std=1.0 会让梯度范数到 1e3 量级。所以自定义层的 `__init__` 里
+必须自己乘一个小的标准差，或者调用 `nn.init` 的 Xavier 版本。
+我把这一步抽成了 `reset_parameters()`，和官方层的命名保持一致，方便 `apply` 复用。
