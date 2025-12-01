@@ -215,3 +215,46 @@ the shape in current model is torch.Size([4, 8])`。
 第 4 章测过，std=1.0 会让梯度范数到 1e3 量级。所以自定义层的 `__init__` 里
 必须自己乘一个小的标准差，或者调用 `nn.init` 的 Xavier 版本。
 我把这一步抽成了 `reset_parameters()`，和官方层的命名保持一致，方便 `apply` 复用。
+
+## 5.5 读写文件
+
+### state_dict 是什么
+
+`net.state_dict()` 返回一个 `OrderedDict`，键是参数名（和 `named_parameters()` 一致），
+值是张量（`detach()` 过的，不带计算图）。它**不含模型结构**，只有数值。
+
+```python
+print(net.state_dict().keys())
+# odict_keys(['0.weight', '0.bias', '2.weight', '2.bias'])
+```
+
+### 为什么存字典而不是存整个对象
+
+`torch.save(net, "model.pt")` 会把整个 Python 对象 pickle 下来，包括类的引用。
+后果是：**改个类名、挪个文件位置，老存档就加载不了**，报
+`Can't get attribute 'MyNet' on <module '__main__'>`。而且 pickle 反序列化本身有安全风险。
+
+存 `state_dict` 就只要「结构 + 数值」两部分：结构由代码定义（可读、可 review），
+数值由存档提供。这也是我现在所有 checkpoint 的做法：
+
+```python
+torch.save({"epoch": 12, "state_dict": net.state_dict(),
+            "optimizer": opt.state_dict()}, "checkpoint/mlp.pt")
+```
+
+多存 `epoch` 和 `optimizer` 是为了断点续训——只存模型权重的话，
+优化器的动量/二阶矩会丢，续训时前几步会抖一下（第 11 章讲 Adam 时会看到这个现象）。
+
+### load_state_dict 的严格性
+
+它默认 `strict=True`：键少了报 missing keys，键多了报 unexpected keys。
+这个严格性是有意的，能挡住「结构改了但忘了改存档」的情况。
+迁移学习时要故意忽略分类头，用 `strict=False` 并检查返回的
+`missing_keys` / `unexpected_keys`，不要闭眼传 False。
+
+### 设备问题
+
+在有 GPU 的机器上存的存档，张量在 cuda 上；在没有 GPU 的机器上读会报
+`Attempting to deserialize object on a CUDA device but torch.cuda.is_available() is False`。
+解决：`torch.load(path, map_location="cpu")`。这一条我写进 `code/03` 了，
+虽然我现在只有 CPU，但存档迟早要在别的机器上读。
