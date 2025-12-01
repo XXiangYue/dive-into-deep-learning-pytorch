@@ -258,3 +258,43 @@ torch.save({"epoch": 12, "state_dict": net.state_dict(),
 `Attempting to deserialize object on a CUDA device but torch.cuda.is_available() is False`。
 解决：`torch.load(path, map_location="cpu")`。这一条我写进 `code/03` 了，
 虽然我现在只有 CPU，但存档迟早要在别的机器上读。
+
+## 5.6 / 5.7 GPU 与设备无关
+
+我这台机器没有 GPU，所以这一节基本是「读懂 + 写好接口」。
+但设备无关的写法本身是有价值的：换机器时不用改代码。
+
+### 三条规则
+
+1. **只在一处决定设备**：
+
+```python
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+```
+
+不要在十几个地方散着写 `if torch.cuda.is_available()`。
+
+2. **模型和数据必须同设备**。`net.to(device)` 是原地修改并返回自己，
+所以 `net = net.to(device)` 和 `net.to(device)` 都对；但数据是
+`X = X.to(device)`（张量的 `.to` 返回新张量，除非 dtype/device 相同）。
+漏搬数据的报错是：
+
+```text
+RuntimeError: Expected all tensors to be on the same device,
+but found at least two devices, cuda:0 and cpu!
+```
+
+3. **存档用 `map_location`**。见上一条笔记。
+
+### 一个容易忽略的点
+
+`net.to(device)` 只搬参数和 buffer，不搬「已经算出来的中间结果」；
+而且它**不会**把优化器里的状态搬过去。如果先建优化器再搬模型，
+优化器的 `state` 里的动量还在旧设备上，下一步更新就会报设备不一致。
+正确顺序是：建模型 → 搬设备 → 建优化器。
+
+### 为什么我没有租 GPU
+
+前五章的数据全是合成的小样本（最多 900 个点），CPU 上单次训练不到 1 秒。
+租卡的钱花在第 6 章之后更值：卷积网络 + 真实数据集才真的需要算力。
+这一点在第 1 章的计划表里就算过账了。
