@@ -132,3 +132,42 @@ net = nn.Sequential(nn.Linear(4, 8), nn.ReLU(), shared, nn.ReLU(), shared, nn.Re
 `parameters()` 默认 `remove_duplicate=True`，所以 8→8 那层只算一次。
 参数量：$4\times8+8 + 8\times8+8 + 8\times2+2 = 40 + 72 + 18 = 130$。
 共享的好处是省参数、并且强制两组变换用同一个映射（类似权重绑定）。
+
+### 初始化函数怎么施加
+
+```python
+def init_normal(m):
+    if isinstance(m, nn.Linear):
+        nn.init.normal_(m.weight, mean=0.0, std=0.01)
+        nn.init.zeros_(m.bias)
+
+net.apply(init_normal)
+```
+
+`apply` 是递归的：先对 `net` 自己调 `init_normal`（它不是 `nn.Linear`，什么都不做），
+再对每个子模块深度优先调用。所以 `init_fn` 里**必须**判断类型，
+否则对 `ReLU` 调 `nn.init.normal_` 会报没有 `weight` 属性。
+
+一个数字上的对照：`nn.Linear(4, 8)` 默认用
+$U(-\sqrt{1/4}, \sqrt{1/4}) = U(-0.5, 0.5)$ 初始化，标准差是 $1/\sqrt{3}\times 0.5 \approx 0.289$；
+用 `init_normal(std=0.01)` 之后标准差是 0.0099，小了 29 倍。
+第 4 章说过初始化尺度直接决定梯度范数，所以这个差别不能忽略。
+
+## 5.3 延后初始化
+
+有一种尴尬情况：写网络的时候还不知道输入的维度。比如先搭好 20 层，
+再看到数据是 784 维。`nn.LazyLinear(256)` 就是干这个的：创建时权重是
+`UninitializedParameter`（形状未知），第一次 `forward` 时根据输入推断形状并调用
+`reset_parameters()`。
+
+```python
+net = nn.Sequential(nn.LazyLinear(8), nn.ReLU(), nn.Linear(8, 2))
+print(net[0].weight)        # <UninitializedParameter>
+net(torch.rand(4, 4))       # 触发推断：输入 4 维 -> weight 形状 (8, 4)
+print(net[0].weight.shape)  # torch.Size([8, 4])
+```
+
+**我的判断：这个概念重要，但 `LazyLinear` 我很少用。**
+因为「不知道输入维度」通常说明我没有先把数据形状算清楚，
+而形状算不清是后面所有 bug 的源头（第 6 章卷积尤其）。知道它在哪、
+知道它为什么报 `has not been initialized` 就够了。
